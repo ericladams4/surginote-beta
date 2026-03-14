@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurgiNote</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="landing-page">
+
+  <div class="landing-overlay">
+    <div class="landing-shell">
+
+      <div class="landing-topbar">
+        <div class="brand-logo brand-logo-white">SurgiNote</div>
+      </div>
+
+      <section class="hero-grid">
+        <div class="hero-copy">
+          <h1 class="landing-headline">
+            AI Op Notes for<br />
+            General Surgeons
+          </h1>
+
+          <p class="landing-subcopy">
+            From surgical shorthand to a polished operative note in under a minute.
+          </p>
+
+          <p class="landing-subcopy-secondary">
+            Paste into EMR • Billing-optimized • Compliant
+          </p>
+        </div>
+
+        <div class="hero-cta-cluster">
+          <a href="/app" class="landing-cta">Try Beta</a>
+          <div class="invite-note">Invite-only private beta</div>
+          <div class="built-by">Built by surgeons</div>
+        </div>
+      </section>
+
+      <section class="demo-section">
+        <div class="demo-column demo-column-input">
+          <div class="demo-label">Example shorthand</div>
+          <div class="demo-input" id="demoInput">
+            29yoF gallstone pancreatitis s/p ERCP w stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated.
+          </div>
+        </div>
+
+        <div class="demo-transform-arrow" id="demoArrow">→</div>
+
+        <div class="demo-column demo-column-output">
+          <div class="demo-label">Generated operative note</div>
+          <pre class="demo-output" id="demoOutput"></pre>
+        </div>
+      </section>
+
+    </div>
+  </div>
+
+  <script>
+    const demoText = `Procedure: Laparoscopic cholecystectomy
+
+Indication:
+The patient is a 29-year-old female with recent gallstone pancreatitis status post ERCP with successful stone retrieval. Following clinical improvement and normalization of laboratory values, she was brought to the operating room for definitive management with laparoscopic cholecystectomy.
+
+Findings:
+Mildly inflamed gallbladder. No evidence of perforation or gangrene. Routine anatomy.
+
+Description of procedure:
+After informed consent was confirmed, the patient was brought to the operating room and placed supine on the operating table. General endotracheal anesthesia was induced without difficulty. The abdomen was prepped and draped in the usual sterile fashion. A surgical time-out was performed.
+
+Pneumoperitoneum was established and three laparoscopic ports were placed under direct visualization. The gallbladder was identified and retracted cephalad. Dissection was carried out within the hepatocystic triangle until the critical view of safety was obtained. The cystic duct and cystic artery were each identified, clipped, and divided in standard fashion.
+
+The gallbladder was then dissected off the liver bed using electrocautery and removed. The operative field was irrigated and inspected, and hemostasis was confirmed. No bile leak was identified. No drain was placed.
+
+Estimated blood loss:
+Minimal
+
+Specimens:
+Gallbladder
+
+Drains:
+None
+
+Complications:
+None
+
+Disposition:
+The patient tolerated the procedure well and was transferred to the recovery area in stable condition.`;
+
+    const outputEl = document.getElementById("demoOutput");
+    const arrowEl = document.getElementById("demoArrow");
+    const inputEl = document.getElementById("demoInput");
+
+    let i = 0;
+    let caretVisible = true;
+    let caretInterval = null;
+
+    function renderWithCaret(text) {
+      outputEl.textContent = text + (caretVisible ? "▌" : "");
+    }
+
+    function startCaretBlink(finalText) {
+      caretInterval = setInterval(() => {
+        caretVisible = !caretVisible;
+        renderWithCaret(finalText);
+      }, 500);
+    }
+
+    function typeDemo() {
+      if (i < demoText.length) {
+        const currentText = demoText.slice(0, i + 1);
+        renderWithCaret(currentText);
+        i++;
+        setTimeout(typeDemo, 8);
+      } else {
+        if (caretInterval) clearInterval(caretInterval);
+        startCaretBlink(demoText);
+      }
+    }
+
+    window.addEventListener("load", () => {
+      i = 0;
+      if (caretInterval) clearInterval(caretInterval);
+
+      inputEl.style.opacity = 0;
+      arrowEl.style.opacity = 0;
+      outputEl.style.opacity = 0;
+      outputEl.textContent = "";
+
+      setTimeout(() => {
+        inputEl.style.opacity = 1;
+      }, 250);
+
+      setTimeout(() => {
+        arrowEl.style.opacity = 1;
+      }, 700);
+
+      setTimeout(() => {
+        outputEl.style.opacity = 1;
+        typeDemo();
+      }, 1000);
+    });
+  </script>
+</body>
+</html>

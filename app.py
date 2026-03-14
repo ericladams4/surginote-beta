@@ -73,6 +73,11 @@ def logout():
 
 
 @app.route("/")
+def landing():
+    return render_template("landing.html")
+
+
+@app.route("/app")
 @require_beta_auth
 def index():
     return render_template("index.html", warning=PUBLIC_WARNING)

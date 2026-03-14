@@ -12,6 +12,24 @@ const ratingEl = document.getElementById("rating");
 const commentEl = document.getElementById("comment");
 const feedbackStatusEl = document.getElementById("feedbackStatus");
 
+function formatAssumptions(assumptions, needsReview) {
+  const lines = [];
+
+  for (const [key, value] of Object.entries(assumptions || {})) {
+    lines.push(`${key}: ${value}`);
+  }
+
+  if ((needsReview || []).length > 0) {
+    lines.push("");
+    lines.push("Review needed:");
+    for (const item of needsReview) {
+      lines.push(`- ${item}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 let latestProcedure = "";
 
 if (generateBtn) {
@@ -38,8 +56,12 @@ if (generateBtn) {
     latestProcedure = data.case_facts.procedure || "";
 
     procedureBadgeEl.textContent = `${data.procedure_label} (confidence: ${data.case_facts.confidence.procedure})`;
-    assumptionsEl.textContent = JSON.stringify(data.case_facts.assumptions, null, 2);
-    needsReviewEl.textContent = JSON.stringify(data.case_facts.needs_review, null, 2);
+    assumptionsEl.textContent = formatAssumptions(
+  data.case_facts.assumptions,
+  data.case_facts.needs_review
+);
+
+needsReviewEl.textContent = (data.case_facts.needs_review || []).join("\n");
 
     metaBox.classList.remove("hidden");
   });
