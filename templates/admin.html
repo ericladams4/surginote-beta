@@ -2,21 +2,79 @@
 <html>
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SurgiNote Admin</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body>
-  <main class="container">
-    <h1>SurgiNote Admin</h1>
+<body class="app-page">
 
-    <input id="procedure" placeholder="procedure key e.g. laparoscopic_cholecystectomy" />
-    <textarea id="adminShorthand" rows="4" placeholder="shorthand input"></textarea>
-    <textarea id="idealNote" rows="12" placeholder="ideal de-identified note"></textarea>
-    <input id="tags" placeholder="comma separated tags" />
+  <div class="app-overlay">
+    <main class="app-shell">
 
-    <button id="saveExampleBtn">Save example</button>
-    <div id="saveStatus"></div>
-  </main>
+      <header class="app-header">
+        <div class="app-brand">
+          <div class="app-logo">SurgiNote</div>
+          <div class="app-product-tag">Admin</div>
+        </div>
+      </header>
+
+      <section class="app-hero">
+        <div class="app-title-block">
+          <h1 class="app-title">Example Library</h1>
+          <p class="app-subtitle">Add curated de-identified examples to improve prompt quality and note generation.</p>
+        </div>
+      </section>
+
+      <section class="admin-grid">
+        <div class="app-card admin-main-card">
+
+          <div class="card-label">Procedure</div>
+          <input
+            id="procedure"
+            class="admin-input"
+            placeholder="procedure key e.g. laparoscopic_cholecystectomy"
+          />
+
+          <div class="card-label admin-label-spacing">Shorthand input</div>
+          <textarea
+            id="adminShorthand"
+            class="admin-textarea"
+            rows="5"
+            placeholder="29yoF. Gallstone pancreatitis s/p ERCP w stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated."
+          ></textarea>
+
+          <div class="card-label admin-label-spacing">Ideal de-identified note</div>
+          <textarea
+            id="idealNote"
+            class="admin-textarea admin-textarea-lg"
+            rows="14"
+            placeholder="Paste the ideal de-identified note here"
+          ></textarea>
+
+          <div class="card-label admin-label-spacing">Tags</div>
+          <input
+            id="tags"
+            class="admin-input"
+            placeholder="comma separated tags"
+          />
+
+          <button id="saveExampleBtn" class="primary-action admin-save-button">Save example</button>
+          <div id="saveStatus" class="feedback-status"></div>
+        </div>
+
+        <aside class="app-card admin-side-card">
+          <div class="card-label">Guidance</div>
+          <div class="admin-guidance">
+            <p>Use only manually de-identified examples.</p>
+            <p>Keep shorthand realistic to actual surgical workflow.</p>
+            <p>Prefer high-quality examples you would actually want the model to emulate.</p>
+            <p>Use consistent procedure keys so retrieval stays clean later.</p>
+          </div>
+        </aside>
+      </section>
+
+    </main>
+  </div>
 
   <script>
     document.getElementById("saveExampleBtn").addEventListener("click", async () => {
@@ -24,7 +82,10 @@
         procedure: document.getElementById("procedure").value,
         shorthand_input: document.getElementById("adminShorthand").value,
         ideal_note: document.getElementById("idealNote").value,
-        tags: document.getElementById("tags").value.split(",").map(x => x.trim()).filter(Boolean)
+        tags: document.getElementById("tags").value
+          .split(",")
+          .map(x => x.trim())
+          .filter(Boolean)
       };
 
       const res = await fetch("/admin/save-example", {
@@ -34,7 +95,8 @@
       });
 
       const data = await res.json();
-      document.getElementById("saveStatus").innerText = data.status === "ok" ? "Saved" : "Error";
+      document.getElementById("saveStatus").innerText =
+        data.status === "ok" ? "Saved" : "Error";
     });
   </script>
 </body>

@@ -2,57 +2,107 @@
 <html>
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>SurgiNote Beta</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body>
-  <main class="container">
-    <h1>SurgiNote Beta</h1>
-    <p class="warning">{{ warning }}</p>
+<body class="app-page">
 
-    <p>Enter the case in your normal shorthand.</p>
+  <div class="app-overlay">
+    <main class="app-shell">
 
-    <textarea id="shorthand" rows="6" placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated."></textarea>
+      <header class="app-header">
+        <div class="app-brand">
+          <div class="app-logo">SurgiNote</div>
+          <div class="app-product-tag">Beta</div>
+        </div>
+      </header>
 
-    <button id="generateBtn">Generate note</button>
+      <section class="app-hero">
+        <div class="app-title-block">
+          <h1 class="app-title">AI Op Notes for General Surgeons</h1>
+          <p class="app-subtitle">From shorthand to a polished operative note in under a minute.</p>
+        </div>
+        <div class="app-warning">{{ warning }}</div>
+      </section>
 
-    <section id="metaBox" class="hidden">
-      <h3>Detected procedure</h3>
-      <div id="procedureBadge"></div>
+      <section class="app-grid">
 
-      <h3>Assumptions used</h3>
-      <pre id="assumptions"></pre>
+        <div class="app-left-column">
+          <div class="app-card app-input-card">
+            <div class="card-label">Enter shorthand</div>
+            <p class="card-helper">Describe the case in your normal surgical shorthand.</p>
 
-      <h3>Needs review</h3>
-      <pre id="needsReview"></pre>
-    </section>
+            <textarea
+              id="shorthand"
+              class="app-shorthand"
+              rows="7"
+              placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated."
+            ></textarea>
 
-    <section>
-      <h3>Generated note</h3>
-      <textarea id="output" rows="18"></textarea>
-    </section>
+            <button id="generateBtn" class="primary-action">Generate note</button>
+          </div>
 
-    <div class="actions">
-      <button id="copyBtn">Copy</button>
-      <button id="emailBtn">Email draft</button>
-    </div>
+          <section id="metaBox" class="app-card hidden">
+            <div class="meta-section">
+              <div class="card-label">Detected procedure</div>
+              <div id="procedureBadge" class="procedure-badge"></div>
+            </div>
 
-    <hr />
+            <div class="meta-section">
+              <div class="card-label">Assumptions used</div>
+              <pre id="assumptions" class="meta-pre"></pre>
+            </div>
 
-    <section>
-      <h3>Feedback</h3>
-      <select id="rating">
-        <option value="">Select one</option>
-        <option value="usable_as_is">Usable as-is</option>
-        <option value="small_edits">Needed small edits</option>
-        <option value="major_edits">Needed major edits</option>
-        <option value="wrong_or_unsafe">Wrong / unsafe</option>
-      </select>
-      <textarea id="comment" rows="4" placeholder="Optional comment"></textarea>
-      <button id="feedbackBtn">Submit feedback</button>
-      <div id="feedbackStatus"></div>
-    </section>
-  </main>
+            <div class="meta-section">
+              <div class="card-label">Needs review</div>
+              <pre id="needsReview" class="meta-pre"></pre>
+            </div>
+          </section>
+        </div>
+
+        <div class="app-right-column">
+          <div class="app-card app-output-card">
+            <div class="output-header">
+              <div>
+                <div class="card-label">Generated operative note</div>
+                <p class="card-helper subtle-light">Generated from shorthand. Review assumed routine details before use.</p>
+              </div>
+              <div class="output-actions">
+                <button id="copyBtn" class="secondary-action">Copy</button>
+                <button id="emailBtn" class="secondary-action">Email draft</button>
+              </div>
+            </div>
+
+            <textarea id="output" class="app-output-text" rows="22"></textarea>
+          </div>
+
+          <div class="app-card app-feedback-card">
+            <div class="card-label">Feedback</div>
+
+            <select id="rating" class="app-select">
+              <option value="">Select one</option>
+              <option value="usable_as_is">Usable as-is</option>
+              <option value="small_edits">Needed small edits</option>
+              <option value="major_edits">Needed major edits</option>
+              <option value="wrong_or_unsafe">Wrong / unsafe</option>
+            </select>
+
+            <textarea
+              id="comment"
+              class="app-feedback-text"
+              rows="4"
+              placeholder="Optional comment"
+            ></textarea>
+
+            <button id="feedbackBtn" class="primary-action feedback-action">Submit feedback</button>
+            <div id="feedbackStatus" class="feedback-status"></div>
+          </div>
+        </div>
+
+      </section>
+    </main>
+  </div>
 
   <script src="/static/app.js"></script>
 </body>

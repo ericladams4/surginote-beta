@@ -2,19 +2,56 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Login</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% if mode == "admin" %}Admin Login{% else %}SurgiNote Beta{% endif %}</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
-<body>
-  <main class="container narrow">
-    <h1>{% if mode == "admin" %}Admin Login{% else %}SurgiNote Beta{% endif %}</h1>
-    <form method="POST">
-      <input type="password" name="password" placeholder="Password" />
-      <button type="submit">Enter</button>
-    </form>
-    {% if error %}
-      <p class="error">{{ error }}</p>
-    {% endif %}
-  </main>
+<body class="app-page">
+
+  <div class="app-overlay">
+    <main class="login-shell">
+
+      <div class="login-brand">SurgiNote</div>
+
+      <section class="login-card">
+        <div class="card-label">
+          {% if mode == "admin" %}Admin Access{% else %}Private Beta{% endif %}
+        </div>
+
+        <h1 class="login-title">
+          {% if mode == "admin" %}
+            Admin Login
+          {% else %}
+            Enter Beta
+          {% endif %}
+        </h1>
+
+        <p class="login-subtitle">
+          {% if mode == "admin" %}
+            Restricted internal access.
+          {% else %}
+            Invite-only access for private beta testing.
+          {% endif %}
+        </p>
+
+        <form method="POST" class="login-form">
+          <input
+            type="password"
+            name="password"
+            class="login-input"
+            placeholder="Password"
+            autocomplete="current-password"
+          />
+          <button type="submit" class="primary-action login-button">Enter</button>
+        </form>
+
+        {% if error %}
+          <p class="error login-error">{{ error }}</p>
+        {% endif %}
+      </section>
+
+    </main>
+  </div>
+
 </body>
 </html>
