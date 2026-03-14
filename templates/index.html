@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>SurgiNote Beta</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>SurgiNote Beta</h1>
+    <p class="warning">{{ warning }}</p>
+
+    <p>Enter the case in your normal shorthand.</p>
+
+    <textarea id="shorthand" rows="6" placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated."></textarea>
+
+    <button id="generateBtn">Generate note</button>
+
+    <section id="metaBox" class="hidden">
+      <h3>Detected procedure</h3>
+      <div id="procedureBadge"></div>
+
+      <h3>Assumptions used</h3>
+      <pre id="assumptions"></pre>
+
+      <h3>Needs review</h3>
+      <pre id="needsReview"></pre>
+    </section>
+
+    <section>
+      <h3>Generated note</h3>
+      <textarea id="output" rows="18"></textarea>
+    </section>
+
+    <div class="actions">
+      <button id="copyBtn">Copy</button>
+      <button id="emailBtn">Email draft</button>
+    </div>
+
+    <hr />
+
+    <section>
+      <h3>Feedback</h3>
+      <select id="rating">
+        <option value="">Select one</option>
+        <option value="usable_as_is">Usable as-is</option>
+        <option value="small_edits">Needed small edits</option>
+        <option value="major_edits">Needed major edits</option>
+        <option value="wrong_or_unsafe">Wrong / unsafe</option>
+      </select>
+      <textarea id="comment" rows="4" placeholder="Optional comment"></textarea>
+      <button id="feedbackBtn">Submit feedback</button>
+      <div id="feedbackStatus"></div>
+    </section>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

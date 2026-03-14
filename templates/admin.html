@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>SurgiNote Admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>SurgiNote Admin</h1>
+
+    <input id="procedure" placeholder="procedure key e.g. laparoscopic_cholecystectomy" />
+    <textarea id="adminShorthand" rows="4" placeholder="shorthand input"></textarea>
+    <textarea id="idealNote" rows="12" placeholder="ideal de-identified note"></textarea>
+    <input id="tags" placeholder="comma separated tags" />
+
+    <button id="saveExampleBtn">Save example</button>
+    <div id="saveStatus"></div>
+  </main>
+
+  <script>
+    document.getElementById("saveExampleBtn").addEventListener("click", async () => {
+      const payload = {
+        procedure: document.getElementById("procedure").value,
+        shorthand_input: document.getElementById("adminShorthand").value,
+        ideal_note: document.getElementById("idealNote").value,
+        tags: document.getElementById("tags").value.split(",").map(x => x.trim()).filter(Boolean)
+      };
+
+      const res = await fetch("/admin/save-example", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(payload)
+      });
+
+      const data = await res.json();
+      document.getElementById("saveStatus").innerText = data.status === "ok" ? "Saved" : "Error";
+    });
+  </script>
+</body>
+</html>

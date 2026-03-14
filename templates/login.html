@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Login</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <main class="container narrow">
+    <h1>{% if mode == "admin" %}Admin Login{% else %}SurgiNote Beta{% endif %}</h1>
+    <form method="POST">
+      <input type="password" name="password" placeholder="Password" />
+      <button type="submit">Enter</button>
+    </form>
+    {% if error %}
+      <p class="error">{{ error }}</p>
+    {% endif %}
+  </main>
+</body>
+</html>
