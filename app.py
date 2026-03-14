@@ -5,7 +5,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request, session, redirect, url_for
-from openai import OpenAI
+from openai import OpenAI, RateLimitError
 
 from parser import build_case_facts
 from prompt_builder import build_prompt
@@ -104,23 +104,31 @@ def generate_note():
     case_facts = build_case_facts(shorthand)
     prompt = build_prompt(case_facts)
 
-    response = client.responses.create(
-        model="gpt-5-mini",
-        input=prompt,
-    )
+    try:
+        response = client.responses.create(
+            model="gpt-5-mini",
+            input=prompt
+        )
+        note_text = response.output_text
 
-    note_text = response.output_text
+    except RateLimitError:
+        return jsonify({
+            "error": "AI generation is temporarily unavailable. Please try again shortly."
+        }), 503
+
+    except Exception as e:
+        return jsonify({
+            "error": f"Generation failed: {str(e)}"
+        }), 500
 
     procedure_key = case_facts.get("procedure")
     procedure_label = PROCEDURE_LABELS.get(procedure_key, "Unknown")
 
-    return jsonify(
-        {
-            "note": note_text,
-            "case_facts": case_facts,
-            "procedure_label": procedure_label,
-        }
-    )
+    return jsonify({
+        "note": note_text,
+        "case_facts": case_facts,
+        "procedure_label": procedure_label,
+    })
 
 
 @app.route("/feedback", methods=["POST"])
