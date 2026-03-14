@@ -398,7 +398,7 @@ hr {
 .app-shell {
   max-width: 1320px;
   margin: 0 auto;
-  padding: 34px 56px 56px;
+  padding: 26px 56px 48px;
   color: white;
 }
 
@@ -406,7 +406,7 @@ hr {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 52px;
+  margin-bottom: 28px;
 }
 
 .app-brand {
@@ -486,7 +486,7 @@ hr {
 
 .app-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 420px) minmax(520px, 1fr);
+  grid-template-columns: minmax(340px, 430px) minmax(560px, 1fr);
   gap: 28px;
   align-items: start;
 }
@@ -495,38 +495,45 @@ hr {
 .app-right-column {
   display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 20px;
 }
 
 .app-card {
-  border-radius: 22px;
+  border-radius: 24px;
   border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(8, 16, 28, 0.46);
+  background: rgba(8, 16, 28, 0.50);
   box-shadow:
     inset 0 1px 0 rgba(255,255,255,0.05),
-    0 20px 50px rgba(0,0,0,0.24);
-  padding: 22px;
+    0 22px 54px rgba(0,0,0,0.26);
+  padding: 24px;
+  color: white;
+}
+
+.app-card {
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(8, 16, 28, 0.50);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 22px 54px rgba(0,0,0,0.26);
+  padding: 24px;
   color: white;
 }
 
 .card-label {
-  margin-bottom: 10px;
-  font-size: 12px;
+  margin-bottom: 8px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.12em;
-  color: rgba(255,255,255,0.72);
+  letter-spacing: 0.14em;
+  color: rgba(255,255,255,0.62);
 }
 
-.card-helper {
-  margin: 0 0 16px 0;
-  font-size: 15px;
-  line-height: 1.45;
-  color: rgba(255,255,255,0.76);
-}
-
-.subtle-light {
-  color: rgba(255,255,255,0.64);
+.card-action-row {
+  margin-top: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
 }
 
 .app-shorthand,
@@ -545,33 +552,38 @@ hr {
 }
 
 .app-shorthand {
-  min-height: 180px;
+  min-height: 190px;
   resize: vertical;
   font-size: 17px;
-  line-height: 1.55;
+  line-height: 1.65;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  margin-bottom: 18px;
+  margin-bottom: 0;
+  padding: 20px;
 }
 
-.app-output-text {
-  min-height: 620px;
+.app-shorthand {
+  min-height: 190px;
   resize: vertical;
-  font-size: 15px;
-  line-height: 1.55;
+  font-size: 17px;
+  line-height: 1.65;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  margin-bottom: 0;
+  padding: 20px;
 }
 
 .app-feedback-text {
   min-height: 120px;
   resize: vertical;
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.55;
   margin-top: 14px;
+  padding: 18px;
 }
 
 .app-select {
   font-size: 15px;
   line-height: 1.4;
+  padding: 16px 18px;
 }
 
 .primary-action,
@@ -582,12 +594,15 @@ hr {
 }
 
 .primary-action {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 180px;
   padding: 18px 28px;
   border-radius: 16px;
   background: #1A6FB3;
   color: white;
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-align: center;
@@ -610,7 +625,7 @@ hr {
   border-radius: 14px;
   background: rgba(255,255,255,0.08);
   color: white;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   border: 1px solid rgba(255,255,255,0.12);
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
@@ -626,7 +641,11 @@ hr {
   align-items: flex-start;
   justify-content: space-between;
   gap: 18px;
-  margin-bottom: 18px;
+  margin-bottom: 20px;
+}
+
+.output-header-copy {
+  min-width: 0;
 }
 
 .output-actions {
@@ -634,6 +653,7 @@ hr {
   gap: 10px;
   flex-wrap: wrap;
   margin-left: auto;
+  padding-top: 2px;
 }
 
 .meta-section + .meta-section {
@@ -660,8 +680,8 @@ hr {
   background: rgba(26, 111, 179, 0.18);
   border: 1px solid rgba(111, 175, 227, 0.22);
   color: rgba(255,255,255,0.94);
-  font-size: 14px;
-  line-height: 1.4;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .structured-preview-grid {
@@ -728,12 +748,7 @@ hr {
 
 @media (max-width: 1100px) {
   .app-shell {
-    padding: 28px 32px 44px;
-  }
-
-  .app-hero {
-    grid-template-columns: 1fr;
-    gap: 18px;
+    padding: 24px 32px 40px;
   }
 
   .app-grid {
@@ -747,24 +762,15 @@ hr {
 
 @media (max-width: 700px) {
   .app-shell {
-    padding: 24px 20px 34px;
+    padding: 20px 18px 28px;
   }
 
   .app-header {
-    margin-bottom: 34px;
+    margin-bottom: 22px;
   }
 
   .app-logo {
     font-size: 32px;
-  }
-
-  .app-title {
-    font-size: 34px;
-    line-height: 1.04;
-  }
-
-  .app-subtitle {
-    font-size: 17px;
   }
 
   .output-header {
@@ -774,6 +780,7 @@ hr {
 
   .output-actions {
     margin-left: 0;
+    padding-top: 0;
   }
 
   .app-output-text {
@@ -791,7 +798,31 @@ hr {
   }
 }
 
+.primary-action:disabled,
+.secondary-action:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.feedback-status {
+  min-height: 20px;
+}
+
+
 /* -------------------- Login skin -------------------- */
+
+.login-brand-left,
+.login-brand-left:visited,
+.login-brand-left:hover,
+.login-brand-left:active {
+  color: #ffffff;
+  text-decoration: none;
+}
+
+.login-brand-left:hover {
+  opacity: 0.85;
+}
 
 .login-shell {
   min-height: 100vh;
@@ -885,6 +916,21 @@ hr {
   }
 }
 
+.login-status-row {
+  min-height: 24px;
+  display: flex;
+  align-items: flex-start;
+}
+
+.login-status-placeholder {
+  margin: 0;
+}
+
+.login-left-pane,
+.login-right-pane {
+  align-items: stretch;
+}
+
 /* -------------------- Admin skin -------------------- */
 
 .admin-grid {
@@ -948,5 +994,175 @@ hr {
 @media (max-width: 1000px) {
   .admin-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* -------------------- Login wide layout -------------------- */
+
+.login-shell-wide {
+  min-height: 100vh;
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 34px 56px 56px;
+  color: white;
+}
+
+.login-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  margin-bottom: 100px;
+}
+
+.login-brand-left {
+  font-family: "Arial Rounded MT Bold", "Arial Rounded MT", Arial, sans-serif;
+  font-size: 38px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1;
+}
+
+/* main card */
+
+.login-wide-card {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  gap: 40px;
+
+  border-radius: 24px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(8, 16, 28, 0.46);
+
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.05),
+    0 20px 50px rgba(0,0,0,0.24);
+
+  padding: 40px;
+}
+
+/* left + right panes identical */
+
+.login-left-pane,
+.login-right-pane {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 420px;
+}
+
+/* divider */
+
+.login-divider {
+  width: 1px;
+  background: rgba(255,255,255,0.18);
+}
+
+/* headings */
+
+.login-title {
+  margin: 0;
+  font-size: 34px;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  color: #ffffff;
+}
+
+.login-subtitle {
+  margin: 0 0 18px 0;
+  font-size: 16px;
+  line-height: 1.55;
+  color: rgba(255,255,255,0.74);
+}
+
+/* form structure */
+
+.login-form,
+.request-access-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* inputs */
+
+.login-input {
+  width: 100%;
+  box-sizing: border-box;
+
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.10);
+
+  background: rgba(5, 12, 22, 0.44);
+  color: #ffffff;
+
+  padding: 18px;
+  font-size: 16px;
+
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.login-input::placeholder {
+  color: rgba(255,255,255,0.45);
+}
+
+/* buttons */
+
+.login-button,
+.request-access-button {
+  width: 100%;
+  padding: 18px 0;
+  border-radius: 16px;
+}
+
+/* request access button visual parity */
+
+.request-access-button {
+  background: rgba(255,255,255,0.10);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: white;
+  font-weight: 700;
+}
+
+.request-access-button:hover {
+  background: rgba(255,255,255,0.16);
+}
+
+/* status text */
+
+.login-error {
+  margin-top: 6px;
+  color: #ffd5d5;
+}
+
+.feedback-status {
+  margin-top: 6px;
+  font-size: 14px;
+  color: rgba(255,255,255,0.70);
+}
+
+/* responsive */
+
+@media (max-width: 900px) {
+
+  .login-shell-wide {
+    padding: 24px 20px 34px;
+  }
+
+  .login-topbar {
+    margin-bottom: 52px;
+  }
+
+  .login-brand-left {
+    font-size: 34px;
+  }
+
+  .login-wide-card {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 28px;
+  }
+
+  .login-divider {
+    display: none;
   }
 }

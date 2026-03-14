@@ -9,49 +9,115 @@
 <body class="app-page">
 
   <div class="app-overlay">
-    <main class="login-shell">
+    <main class="login-shell-wide">
 
-      <div class="login-brand">SurgiNote</div>
+<div class="login-topbar">
+  <a href="/" class="login-brand-left">SurgiNote</a>
+</div>
 
-      <section class="login-card">
-        <div class="card-label">
-          {% if mode == "admin" %}Admin Access{% else %}Private Beta{% endif %}
+      <section class="login-wide-card">
+
+        <div class="login-left-pane">
+
+          <h1 class="login-title">
+            {% if mode == "admin" %}
+              Admin Login
+            {% else %}
+              Private Beta
+            {% endif %}
+          </h1>
+
+          <p class="login-subtitle">
+            {% if mode == "admin" %}
+              Restricted internal access.
+            {% else %}
+              Invite-only access for private beta testing.
+            {% endif %}
+          </p>
+
+          <form method="POST" class="login-form">
+            <input
+              type="password"
+              name="password"
+              class="login-input"
+              placeholder="Password"
+              autocomplete="current-password"
+            />
+            <button type="submit" class="primary-action login-button">Enter</button>
+          </form>
+
+          <div class="login-status-row">
+            {% if error %}
+              <p class="error login-error">{{ error }}</p>
+            {% else %}
+              <p class="login-status-placeholder">&nbsp;</p>
+            {% endif %}
+          </div>
         </div>
 
-        <h1 class="login-title">
-          {% if mode == "admin" %}
-            Admin Login
-          {% else %}
-            Enter Beta
-          {% endif %}
-        </h1>
+        {% if mode != "admin" %}
+        <div class="login-divider"></div>
 
-        <p class="login-subtitle">
-          {% if mode == "admin" %}
-            Restricted internal access.
-          {% else %}
-            Invite-only access for private beta testing.
-          {% endif %}
-        </p>
+        <div class="login-right-pane">
 
-        <form method="POST" class="login-form">
-          <input
-            type="password"
-            name="password"
-            class="login-input"
-            placeholder="Password"
-            autocomplete="current-password"
-          />
-          <button type="submit" class="primary-action login-button">Enter</button>
-        </form>
+          <h1 class="login-title">Request Access</h1>
 
-        {% if error %}
-          <p class="error login-error">{{ error }}</p>
+          <p class="login-subtitle">
+            Enter your email to request private beta access.
+          </p>
+
+          <div class="request-access-form">
+            <input
+              type="email"
+              id="requestAccessEmail"
+              class="login-input"
+              placeholder="Email address"
+              autocomplete="email"
+            />
+            <button id="requestAccessBtn" type="button" class="secondary-action request-access-button">
+             Request Access
+            </button>
+          </div>
+
+          <div class="login-status-row">
+            <div id="requestAccessStatus" class="feedback-status login-status-placeholder">&nbsp;</div>
+          </div>
+        </div>
         {% endif %}
+
       </section>
 
     </main>
   </div>
 
+  {% if mode != "admin" %}
+  <script>
+    const requestBtn = document.getElementById("requestAccessBtn");
+    const requestEmail = document.getElementById("requestAccessEmail");
+    const requestStatus = document.getElementById("requestAccessStatus");
+
+    if (requestBtn) {
+      requestBtn.addEventListener("click", async () => {
+        const email = (requestEmail.value || "").trim();
+
+        const res = await fetch("/request-access", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email })
+        });
+
+        const data = await res.json();
+
+        if (data.error) {
+          requestStatus.textContent = data.error;
+          return;
+        }
+
+        requestStatus.textContent = "Thanks — we received your request.";
+        requestEmail.value = "";
+      });
+    }
+  </script>
+  {% endif %}
 </body>
 </html>

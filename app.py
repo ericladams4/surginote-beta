@@ -10,6 +10,7 @@ from openai import OpenAI, RateLimitError
 from parser import build_case_facts
 from prompt_builder import build_prompt
 from config import PUBLIC_WARNING, PROCEDURE_LABELS
+from db import init_db, get_conn
 
 load_dotenv()
 
@@ -24,6 +25,8 @@ DATA_DIR.mkdir(exist_ok=True)
 
 BETA_PASSWORD = os.getenv("BETA_PASSWORD", "")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+
+init_db()
 
 
 def require_beta_auth(f):
@@ -94,6 +97,32 @@ def healthz():
     return jsonify({"status": "ok"})
 
 
+@app.route("/request-access", methods=["POST"])
+def request_access():
+    payload = request.get_json(silent=True) or {}
+    email = (payload.get("email") or "").strip().lower()
+
+    if not email:
+        return jsonify({"error": "Email is required"}), 400
+
+    if "@" not in email or "." not in email:
+        return jsonify({"error": "Enter a valid email"}), 400
+
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO access_requests (email) VALUES (?)",
+            (email,)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "ok"})
+    except Exception:
+        # Intentionally return OK even if duplicate, to keep UX simple for now
+        return jsonify({"status": "ok"})
+
+
 @app.route("/generate-note", methods=["POST"])
 @require_beta_auth
 def generate_note():
@@ -135,23 +164,47 @@ def generate_note():
         "procedure_label": procedure_label,
     })
 
+@app.route("/admin/feedback")
+@require_admin_auth
+def admin_feedback():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, shorthand, procedure, rating, comment, generated_note, created_at
+        FROM feedback
+        ORDER BY created_at DESC
+    """)
+    rows = cur.fetchall()
+    conn.close()
+
+    return render_template("feedback_admin.html", feedback_rows=rows)
 
 @app.route("/feedback", methods=["POST"])
 @require_beta_auth
 def feedback():
     payload = request.get_json(silent=True) or {}
-    record = {
-        "shorthand": payload.get("shorthand", ""),
-        "procedure": payload.get("procedure", ""),
-        "rating": payload.get("rating", ""),
-        "comment": payload.get("comment", ""),
-    }
 
-    outpath = DATA_DIR / "feedback.jsonl"
-    with open(outpath, "a", encoding="utf-8") as f:
-        f.write(json.dumps(record) + "\n")
+    shorthand = payload.get("shorthand", "")
+    procedure = payload.get("procedure", "")
+    rating = payload.get("rating", "")
+    comment = payload.get("comment", "")
+    generated_note = payload.get("generated_note", "")
 
-    return jsonify({"status": "ok"})
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO feedback (shorthand, procedure, rating, comment, generated_note)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (shorthand, procedure, rating, comment, generated_note)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        return jsonify({"error": f"Unable to save feedback: {str(e)}"}), 500
 
 
 @app.route("/admin/save-example", methods=["POST"])

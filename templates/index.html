@@ -20,14 +20,6 @@
         <a href="/logout" class="app-logout">Log out</a>
       </header>
 
-      <section class="app-hero">
-        <div class="app-title-block">
-          <h1 class="app-title">AI Op Notes for General Surgeons</h1>
-          <p class="app-subtitle">From shorthand to a polished operative note in under a minute.</p>
-        </div>
-        <div class="app-warning">{{ warning }}</div>
-      </section>
-
       <section class="app-grid">
 
         <div class="app-left-column">
@@ -42,7 +34,9 @@
               placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated."
             ></textarea>
 
-            <button id="generateBtn" class="primary-action">Generate note</button>
+            <div class="card-action-row">
+              <button id="generateBtn" class="primary-action">Generate note</button>
+            </div>
           </div>
 
           <section id="structuredPreviewBox" class="app-card hidden">
@@ -71,10 +65,11 @@
         <div class="app-right-column">
           <div class="app-card app-output-card">
             <div class="output-header">
-              <div>
+              <div class="output-header-copy">
                 <div class="card-label">Generated operative note</div>
-                <p class="card-helper subtle-light">Generated from shorthand. Review assumed routine details before use.</p>
+                <p class="card-helper subtle-light">Review assumed routine details before use.</p>
               </div>
+
               <div class="output-actions">
                 <button id="copyBtn" class="secondary-action">Copy</button>
                 <button id="emailBtn" class="secondary-action">Email draft</button>
@@ -102,7 +97,9 @@
               placeholder="Optional comment"
             ></textarea>
 
-            <button id="feedbackBtn" class="primary-action feedback-action">Submit feedback</button>
+            <div class="card-action-row">
+              <button id="feedbackBtn" class="primary-action feedback-action">Submit feedback</button>
+            </div>
             <div id="feedbackStatus" class="feedback-status"></div>
           </div>
         </div>
