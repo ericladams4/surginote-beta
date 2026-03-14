@@ -179,6 +179,21 @@ def admin_feedback():
 
     return render_template("feedback_admin.html", feedback_rows=rows)
 
+
+@app.route("/admin/access-requests")
+@require_admin_auth
+def admin_access_requests():
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("""
+        SELECT id, email, created_at
+        FROM access_requests
+        ORDER BY created_at DESC
+    """)
+    rows = cur.fetchall()
+    conn.close()
+
+    return render_template("access_requests.html", requests=rows)
 @app.route("/feedback", methods=["POST"])
 @require_beta_auth
 def feedback():
@@ -205,6 +220,7 @@ def feedback():
         return jsonify({"status": "ok"})
     except Exception as e:
         return jsonify({"error": f"Unable to save feedback: {str(e)}"}), 500
+
 
 
 @app.route("/admin/save-example", methods=["POST"])

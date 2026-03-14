@@ -997,6 +997,61 @@ hr {
   }
 }
 
+.admin-links {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.admin-link-button {
+  display: inline-flex;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.admin-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: white;
+  font-size: 14px;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 14px 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  vertical-align: top;
+}
+
+.admin-table th {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.10em;
+  color: rgba(255,255,255,0.65);
+  font-weight: 700;
+}
+
+.admin-table td {
+  color: rgba(255,255,255,0.92);
+}
+
+.admin-table tbody tr:hover {
+  background: rgba(255,255,255,0.04);
+}
+
+.admin-table-note {
+  max-width: 420px;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
 /* -------------------- Login wide layout -------------------- */
 
 .login-shell-wide {

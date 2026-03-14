@@ -16,61 +16,64 @@
           <div class="app-logo">SurgiNote</div>
           <div class="app-product-tag">Admin</div>
         </div>
+        <a href="/logout" class="app-logout">Log out</a>
       </header>
 
-      <section class="app-hero">
-        <div class="app-title-block">
-          <h1 class="app-title">Example Library</h1>
-          <p class="app-subtitle">Add curated de-identified examples to improve prompt quality and note generation.</p>
-        </div>
-      </section>
+      <section class="app-grid">
+        <div class="app-left-column">
+          <div class="app-card admin-main-card">
+            <div class="card-label">Example Library</div>
 
-      <section class="admin-grid">
-        <div class="app-card admin-main-card">
+            <input
+              id="procedure"
+              class="admin-input"
+              placeholder="procedure key e.g. laparoscopic_cholecystectomy"
+            />
 
-          <div class="card-label">Procedure</div>
-          <input
-            id="procedure"
-            class="admin-input"
-            placeholder="procedure key e.g. laparoscopic_cholecystectomy"
-          />
+            <div class="card-label admin-label-spacing">Shorthand input</div>
+            <textarea
+              id="adminShorthand"
+              class="admin-textarea"
+              rows="5"
+              placeholder="29yoF. Gallstone pancreatitis s/p ERCP w stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated."
+            ></textarea>
 
-          <div class="card-label admin-label-spacing">Shorthand input</div>
-          <textarea
-            id="adminShorthand"
-            class="admin-textarea"
-            rows="5"
-            placeholder="29yoF. Gallstone pancreatitis s/p ERCP w stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated."
-          ></textarea>
+            <div class="card-label admin-label-spacing">Ideal de-identified note</div>
+            <textarea
+              id="idealNote"
+              class="admin-textarea admin-textarea-lg"
+              rows="14"
+              placeholder="Paste the ideal de-identified note here"
+            ></textarea>
 
-          <div class="card-label admin-label-spacing">Ideal de-identified note</div>
-          <textarea
-            id="idealNote"
-            class="admin-textarea admin-textarea-lg"
-            rows="14"
-            placeholder="Paste the ideal de-identified note here"
-          ></textarea>
+            <div class="card-label admin-label-spacing">Tags</div>
+            <input
+              id="tags"
+              class="admin-input"
+              placeholder="comma separated tags"
+            />
 
-          <div class="card-label admin-label-spacing">Tags</div>
-          <input
-            id="tags"
-            class="admin-input"
-            placeholder="comma separated tags"
-          />
-
-          <button id="saveExampleBtn" class="primary-action admin-save-button">Save example</button>
-          <div id="saveStatus" class="feedback-status"></div>
-        </div>
-
-        <aside class="app-card admin-side-card">
-          <div class="card-label">Guidance</div>
-          <div class="admin-guidance">
-            <p>Use only manually de-identified examples.</p>
-            <p>Keep shorthand realistic to actual surgical workflow.</p>
-            <p>Prefer high-quality examples you would actually want the model to emulate.</p>
-            <p>Use consistent procedure keys so retrieval stays clean later.</p>
+            <button id="saveExampleBtn" class="primary-action admin-save-button">Save example</button>
+            <div id="saveStatus" class="feedback-status"></div>
           </div>
-        </aside>
+        </div>
+
+        <div class="app-right-column">
+          <div class="app-card admin-side-card">
+            <div class="card-label">Admin tools</div>
+
+            <div class="admin-guidance">
+              <p>Use only manually de-identified examples.</p>
+              <p>Keep shorthand realistic to actual surgical workflow.</p>
+              <p>Prefer examples you would actually want the model to emulate.</p>
+            </div>
+
+            <div class="admin-links">
+              <a href="/admin/feedback" class="secondary-action admin-link-button">View feedback</a>
+              <a href="/admin/access-requests" class="secondary-action admin-link-button">View access requests</a>
+            </div>
+          </div>
+        </div>
       </section>
 
     </main>

@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurgiNote Admin - Access Requests</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+
+      <header class="app-header">
+        <div class="app-brand">
+          <div class="app-logo">SurgiNote</div>
+          <div class="app-product-tag">Admin</div>
+        </div>
+        <a href="/admin" class="app-logout">Back</a>
+      </header>
+
+      <section class="app-card">
+        <div class="card-label">Access requests</div>
+
+        {% if requests and requests|length > 0 %}
+          <div class="admin-table-wrap">
+            <table class="admin-table">
+              <thead>
+                <tr>
+                  <th>ID</th>
+                  <th>Email</th>
+                  <th>Requested at</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in requests %}
+                  <tr>
+                    <td>{{ row["id"] }}</td>
+                    <td>{{ row["email"] }}</td>
+                    <td>{{ row["created_at"] }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="structured-empty">No access requests yet.</div>
+        {% endif %}
+      </section>
+
+    </main>
+  </div>
+</body>
+</html>
