@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Sample - SurgiNote Admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+
+  <div class="app-overlay">
+    <main class="app-shell">
+
+      <header class="app-header">
+        <div class="app-brand">
+          <div class="app-logo">SurgiNote</div>
+          <div class="app-product-tag">Admin</div>
+        </div>
+        <a href="/admin/sample-library" class="app-logout">Back</a>
+      </header>
+
+      <section class="app-card admin-main-card">
+        <div class="card-label">Edit sample</div>
+
+        {% if error %}
+          <div class="feedback-status" style="margin-bottom: 14px;">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" class="edit-sample-form">
+          <input
+            name="procedure"
+            class="admin-input"
+            placeholder="procedure key"
+            value="{{ sample['procedure'] }}"
+          />
+
+          <div class="card-label admin-label-spacing">Sample title</div>
+          <input
+            name="title"
+            class="admin-input"
+            placeholder="sample title"
+            value="{{ sample['title'] }}"
+          />
+
+          <div class="card-label admin-label-spacing">Shorthand input</div>
+          <textarea
+            name="shorthand_input"
+            class="admin-textarea"
+            rows="5"
+          >{{ sample["shorthand_input"] }}</textarea>
+
+          <div class="card-label admin-label-spacing">Ideal de-identified note</div>
+          <textarea
+            name="ideal_note"
+            class="admin-textarea admin-textarea-lg"
+            rows="14"
+          >{{ sample["ideal_note"] }}</textarea>
+
+          <div class="card-label admin-label-spacing">Tags</div>
+          <input
+            name="tags"
+            class="admin-input"
+            placeholder="comma separated tags"
+            value="{{ sample['tags'] }}"
+          />
+
+          <div class="edit-sample-actions">
+            <button type="submit" class="primary-action admin-save-button">Save changes</button>
+            <a href="/admin/sample-library" class="secondary-action admin-link-button">Cancel</a>
+          </div>
+        </form>
+      </section>
+
+    </main>
+  </div>
+</body>
+</html>

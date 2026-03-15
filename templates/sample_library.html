@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurgiNote Admin - Sample Library</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+
+      <header class="app-header">
+        <div class="app-brand">
+          <div class="app-logo">SurgiNote</div>
+          <div class="app-product-tag">Admin</div>
+        </div>
+        <a href="/admin" class="app-logout">Back</a>
+      </header>
+
+      <section class="app-card sample-library-shell">
+        <div class="card-label">Sample library</div>
+
+        <form method="GET" class="sample-filter-row">
+          <select name="procedure" class="app-select sample-filter-select">
+            <option value="">All procedures</option>
+            {% for row in procedures %}
+              <option value="{{ row['procedure'] }}" {% if selected_procedure == row['procedure'] %}selected{% endif %}>
+                {{ row["procedure"] }}
+              </option>
+            {% endfor %}
+          </select>
+          <button type="submit" class="secondary-action sample-filter-button">Filter</button>
+        </form>
+
+        {% if samples and samples|length > 0 %}
+          <div class="sample-library-list">
+            {% for row in samples %}
+              <article class="sample-library-card">
+
+                <div class="sample-library-top">
+                  <div class="sample-library-top-left">
+                    <div class="sample-library-procedure">{{ row["procedure"] }}</div>
+                    <h2 class="sample-library-title">
+                      {{ row["title"] if row["title"] else "Untitled sample" }}
+                    </h2>
+                  </div>
+
+                  <div class="sample-library-top-right">
+                    <div class="sample-library-date">{{ row["created_at"] }}</div>
+                  </div>
+                </div>
+
+                {% if row["tags"] %}
+                  <div class="sample-library-tags-row">
+                    {% for tag in row["tags"].split(",") %}
+                      {% if tag.strip() %}
+                        <span class="sample-tag-pill">{{ tag.strip() }}</span>
+                      {% endif %}
+                    {% endfor %}
+                  </div>
+                {% endif %}
+
+                <div class="sample-library-actions">
+                  <a href="/admin/sample-library/{{ row['id'] }}/edit" class="secondary-action admin-link-button">Edit</a>
+
+                  <form method="POST" action="/admin/sample-library/{{ row['id'] }}/duplicate" class="inline-action-form">
+                    <button type="submit" class="secondary-action">Duplicate</button>
+                  </form>
+
+                  <form method="POST" action="/admin/sample-library/{{ row['id'] }}/delete" class="inline-action-form" onsubmit="return confirm('Delete this sample?');">
+                    <button type="submit" class="secondary-action destructive-action">Delete</button>
+                  </form>
+                </div>
+
+                <div class="sample-library-columns">
+                  <section class="sample-library-panel">
+                    <div class="sample-panel-label">Shorthand input</div>
+                    <div class="sample-panel-body sample-panel-body-short">
+                      <pre class="sample-panel-pre">{{ row["shorthand_input"] }}</pre>
+                    </div>
+                  </section>
+
+                  <section class="sample-library-panel">
+                    <div class="sample-panel-label">Ideal note</div>
+                    <div class="sample-panel-body sample-panel-body-note">
+                      <pre class="sample-panel-pre">{{ row["ideal_note"] }}</pre>
+                    </div>
+                  </section>
+                </div>
+
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="structured-empty">No samples saved yet.</div>
+        {% endif %}
+      </section>
+
+    </main>
+  </div>
+</body>
+</html>

@@ -56,5 +56,17 @@ def init_db():
     )
     """)
 
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS procedure_samples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        procedure TEXT NOT NULL,
+        title TEXT,
+        shorthand_input TEXT NOT NULL,
+        ideal_note TEXT NOT NULL,
+        tags TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+
     conn.commit()
     conn.close()
