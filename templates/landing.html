@@ -1,10 +1,42 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SurgiNote</title>
+
+  <title>SurgiNote | Surgical Documentation Software</title>
+  <meta name="description" content="SurgiNote is a clinical documentation tool for surgeons that converts shorthand into structured operative, clinic, and consult notes." />
+  <meta name="keywords" content="surgical documentation, operative notes, clinic notes, consult notes, medical documentation software, physician documentation tool, healthcare software, surgeon notes" />
+  <meta name="category" content="healthcare" />
+  <meta name="application-name" content="SurgiNote" />
+  <meta name="robots" content="index,follow" />
+
+  <meta property="og:title" content="SurgiNote | Surgical Documentation Software" />
+  <meta property="og:description" content="Clinical documentation software for surgeons that helps draft operative, clinic, and consult notes." />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="SurgiNote" />
+
   <link rel="stylesheet" href="/static/style.css" />
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "MedicalWebPage",
+    "name": "SurgiNote",
+    "description": "Clinical documentation software for surgeons that generates operative, consult, and clinic notes.",
+    "medicalAudience": {
+      "@type": "MedicalAudience",
+      "audienceType": "Physician"
+    },
+    "about": {
+      "@type": "MedicalProcedure"
+    },
+    "publisher": {
+      "@type": "Organization",
+      "name": "SurgiNote"
+    }
+  }
+  </script>
 </head>
 <body class="landing-page">
 
@@ -18,17 +50,21 @@
       <section class="hero-grid">
         <div class="hero-copy">
           <h1 class="landing-headline">
-            AI Op Notes for<br />
-            General Surgeons
+            Surgical Documentation<br />
+            for General Surgeons
           </h1>
 
           <p class="landing-subcopy">
-            Converts shorthand to a polished operative note in seconds.
+            Converts shorthand into polished operative, clinic, and consult notes in seconds.
+          </p>
+
+          <p class="landing-subcopy-secondary">
+            Built for real surgical workflows, with note structures that can be tailored to each surgeon’s preferred style.
           </p>
         </div>
 
         <div class="hero-cta-cluster">
-          <a href="/app" class="landing-cta">Try Beta</a>
+          <a href="/login" class="landing-cta">Try Beta</a>
           <div class="invite-note">Invite-only private beta</div>
           <div class="built-by">Built by surgeons</div>
         </div>
@@ -50,6 +86,15 @@
         </div>
       </section>
 
+      <section class="feature-strip">
+        <ul class="feature-list">
+          <li>Operative notes</li>
+          <li>Clinic notes</li>
+          <li>Consult notes</li>
+          <li>Template-based formatting</li>
+          <li>Built for surgeons</li>
+        </ul>
+      </section>
 
     </div>
   </div>
