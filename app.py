@@ -1,10 +1,22 @@
+import json
 import os
 import re
 from functools import wraps
 from pathlib import Path
 
+import requests
 from dotenv import load_dotenv
-from flask import Flask, jsonify, render_template, request, session, redirect, url_for
+from flask import (
+    Flask,
+    jsonify,
+    render_template,
+    request,
+    session,
+    redirect,
+    url_for,
+    Response,
+    stream_with_context,
+)
 from openai import OpenAI, RateLimitError
 
 from parser import build_case_facts
@@ -91,6 +103,57 @@ def get_or_create_user(phone: str):
 
     conn.close()
     return user
+
+
+def build_generation_context(payload):
+    shorthand = (payload.get("shorthand") or "").strip()
+    note_type = (payload.get("note_type") or "op_note").strip()
+
+    if note_type not in ALLOWED_NOTE_TYPES:
+        return None, jsonify({"error": "Invalid note type"}), 400
+
+    if not shorthand:
+        return None, jsonify({"error": "No shorthand provided"}), 400
+
+    if not os.getenv("OPENAI_API_KEY"):
+        return None, jsonify({"error": "Missing OPENAI_API_KEY environment variable"}), 500
+
+    case_facts = build_case_facts(shorthand)
+
+    user_id = session["user_id"]
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT content FROM templates WHERE user_id = ? AND note_type = ?",
+        (user_id, note_type)
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    template_content = row["content"] if row else None
+
+    prompt = build_prompt(
+        case_facts=case_facts,
+        note_type=note_type,
+        template_content=template_content
+    )
+
+    procedure_key = case_facts.get("procedure")
+    procedure_label = PROCEDURE_LABELS.get(procedure_key, "Unknown")
+
+    context = {
+        "shorthand": shorthand,
+        "note_type": note_type,
+        "case_facts": case_facts,
+        "template_content": template_content,
+        "prompt": prompt,
+        "procedure_label": procedure_label,
+    }
+    return context, None, None
+
+
+def sse_event(data: dict) -> str:
+    return f"data: {json.dumps(data)}\n\n"
 
 
 @app.route("/login", methods=["GET", "POST"])
@@ -286,42 +349,15 @@ def delete_template(note_type):
 @require_user_auth
 def generate_note():
     payload = request.get_json(silent=True) or {}
-    shorthand = payload.get("shorthand", "").strip()
-    note_type = (payload.get("note_type") or "op_note").strip()
+    context, error_response, status_code = build_generation_context(payload)
 
-    if note_type not in ALLOWED_NOTE_TYPES:
-        return jsonify({"error": "Invalid note type"}), 400
-
-    if not shorthand:
-        return jsonify({"error": "No shorthand provided"}), 400
-
-    if not os.getenv("OPENAI_API_KEY"):
-        return jsonify({"error": "Missing OPENAI_API_KEY environment variable"}), 500
-
-    case_facts = build_case_facts(shorthand)
-
-    user_id = session["user_id"]
-    conn = get_conn()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT content FROM templates WHERE user_id = ? AND note_type = ?",
-        (user_id, note_type)
-    )
-    row = cur.fetchone()
-    conn.close()
-
-    template_content = row["content"] if row else None
-
-    prompt = build_prompt(
-        case_facts=case_facts,
-        note_type=note_type,
-        template_content=template_content
-    )
+    if error_response:
+        return error_response, status_code
 
     try:
         response = client.responses.create(
             model="gpt-5-mini",
-            input=prompt
+            input=context["prompt"]
         )
         note_text = response.output_text
 
@@ -335,16 +371,109 @@ def generate_note():
             "error": f"Generation failed: {str(e)}"
         }), 500
 
-    procedure_key = case_facts.get("procedure")
-    procedure_label = PROCEDURE_LABELS.get(procedure_key, "Unknown")
-
     return jsonify({
         "note": note_text,
-        "case_facts": case_facts,
-        "procedure_label": procedure_label,
-        "note_type": note_type,
-        "used_template": bool(template_content),
+        "case_facts": context["case_facts"],
+        "procedure_label": context["procedure_label"],
+        "note_type": context["note_type"],
+        "used_template": bool(context["template_content"]),
     })
+
+
+@app.route("/generate-note-stream", methods=["POST"])
+@require_user_auth
+def generate_note_stream():
+    payload = request.get_json(silent=True) or {}
+    context, error_response, status_code = build_generation_context(payload)
+
+    if error_response:
+        return error_response, status_code
+
+    prompt = context["prompt"]
+
+    def generate():
+        yield sse_event({
+            "type": "meta",
+            "case_facts": context["case_facts"],
+            "procedure_label": context["procedure_label"],
+            "note_type": context["note_type"],
+            "used_template": bool(context["template_content"]),
+        })
+
+        try:
+            with requests.post(
+                "https://api.openai.com/v1/responses",
+                headers={
+                    "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "gpt-5-mini",
+                    "input": prompt,
+                    "stream": True,
+                },
+                stream=True,
+                timeout=300,
+            ) as r:
+                r.raise_for_status()
+
+                saw_done = False
+
+                for raw_line in r.iter_lines(decode_unicode=True):
+                    if not raw_line:
+                        continue
+
+                    if not raw_line.startswith("data: "):
+                        continue
+
+                    payload_str = raw_line[6:].strip()
+
+                    if payload_str == "[DONE]":
+                        break
+
+                    try:
+                        event = json.loads(payload_str)
+                    except json.JSONDecodeError:
+                        continue
+
+                    event_type = event.get("type")
+
+                    if event_type == "response.output_text.delta":
+                        delta = event.get("delta", "")
+                        if delta:
+                            yield sse_event({"type": "delta", "delta": delta})
+
+                    elif event_type == "response.completed":
+                        saw_done = True
+                        yield sse_event({"type": "done"})
+
+                    elif event_type == "response.error":
+                        message = event.get("error", {}).get("message", "Streaming failed.")
+                        yield sse_event({"type": "error", "error": message})
+                        return
+
+                if not saw_done:
+                    yield sse_event({"type": "done"})
+
+        except requests.HTTPError as e:
+            try:
+                body = e.response.json()
+                message = body.get("error", {}).get("message", str(e))
+            except Exception:
+                message = str(e)
+            yield sse_event({"type": "error", "error": f"Generation failed: {message}"})
+
+        except Exception as e:
+            yield sse_event({"type": "error", "error": f"Generation failed: {str(e)}"})
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.route("/feedback", methods=["POST"])

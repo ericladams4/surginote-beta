@@ -316,25 +316,25 @@ def normalize_text(text: str) -> str:
     t = text.strip().lower()
 
     for k in sorted(ABBREVIATIONS.keys(), key=len, reverse=True):
-        t = re.sub(rf'\b{re.escape(k)}\b', ABBREVIATIONS[k], t)
+        t = re.sub(rf"\b{re.escape(k)}\b", ABBREVIATIONS[k], t)
 
-    t = re.sub(r'(\d{1,3})\s*yo\s*f\b', r'\1 year old female', t, flags=re.IGNORECASE)
-    t = re.sub(r'(\d{1,3})\s*yo\s*m\b', r'\1 year old male', t, flags=re.IGNORECASE)
+    t = re.sub(r"(\d{1,3})\s*yo\s*f\b", r"\1 year old female", t, flags=re.IGNORECASE)
+    t = re.sub(r"(\d{1,3})\s*yo\s*m\b", r"\1 year old male", t, flags=re.IGNORECASE)
 
-    t = re.sub(r'[.;,]+', ' ', t)
-    t = re.sub(r'\s+', ' ', t).strip()
+    t = re.sub(r"[.;,]+", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
     return t
 
 
 def extract_demographics(text: str):
-    m = re.search(r'(\d{1,3})\s+year old\s+(female|male)', text)
+    m = re.search(r"(\d{1,3})\s+year old\s+(female|male)", text)
     if not m:
         return {}
     return {"age": int(m.group(1)), "sex": m.group(2)}
 
 
 def extract_ports(text: str):
-    m = re.search(r'(\d+)\s+ports?\b', text)
+    m = re.search(r"(\d+)\s+ports?\b", text)
     return int(m.group(1)) if m else None
 
 
@@ -412,9 +412,9 @@ def extract_plans(text: str):
 
 def extract_consult_question(text: str):
     patterns = [
-        r'surgery consulted for (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)',
-        r'consulted for (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)',
-        r'reason for consult (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)',
+        r"surgery consulted for (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)",
+        r"consulted for (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)",
+        r"reason for consult (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)",
     ]
     for pattern in patterns:
         m = re.search(pattern, text)
@@ -426,17 +426,33 @@ def extract_consult_question(text: str):
 def extract_lab_data(text: str):
     labs = {}
 
-    wbc = re.search(r'wbc\s*(?:of|=)?\s*(\d+(\.\d+)?)', text)
+    wbc = re.search(r"wbc\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
     if wbc:
         labs["wbc"] = wbc.group(1)
 
-    lactate = re.search(r'lactate\s*(?:of|=)?\s*(\d+(\.\d+)?)', text)
+    lactate = re.search(r"lactate\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
     if lactate:
         labs["lactate"] = lactate.group(1)
 
-    hgb = re.search(r'hgb\s*(?:of|=)?\s*(\d+(\.\d+)?)', text)
+    hgb = re.search(r"hgb\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
     if hgb:
         labs["hgb"] = hgb.group(1)
+
+    bili = re.search(r"(?:bilirubin|bili)\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
+    if bili:
+        labs["bilirubin"] = bili.group(1)
+
+    alk_phos = re.search(r"(?:alk phos|alkaline phosphatase)\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
+    if alk_phos:
+        labs["alk_phos"] = alk_phos.group(1)
+
+    ast = re.search(r"ast\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
+    if ast:
+        labs["ast"] = ast.group(1)
+
+    alt = re.search(r"alt\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
+    if alt:
+        labs["alt"] = alt.group(1)
 
     if "labs within normal limits" in text or "labs wnl" in text or "within normal limits" in text:
         labs["labs_summary"] = "within normal limits"
@@ -470,7 +486,7 @@ def extract_exam_findings(text: str):
 
 def extract_pmh(text: str):
     explicit = re.search(
-        r'(?:past medical history|pmh)\s*(?:is|:)?\s*(.+?)(?:past surgical history|psh|family history|fh|social history|sh|review of systems|ros|objective|assessment|plan|$)',
+        r"(?:past medical history|pmh)\s*(?:is|:)?\s*(.+?)(?:past surgical history|psh|family history|fh|social history|sh|review of systems|ros|objective|assessment|plan|$)",
         text
     )
     if explicit:
@@ -482,7 +498,8 @@ def extract_pmh(text: str):
         "cirrhosis", "ckd", "chronic kidney disease", "heart failure",
         "congestive heart failure", "cancer", "malignancy", "obesity",
         "diverticulitis", "gallstones", "cholelithiasis", "appendicitis",
-        "small bowel obstruction", "crohn", "ulcerative colitis"
+        "small bowel obstruction", "crohn", "ulcerative colitis",
+        "primary biliary cholangitis", "pbc", "pancreatitis", "choledocholithiasis",
     ]
     found = [term for term in pmh_terms if term in text]
     return ", ".join(sorted(set(found))) if found else None
@@ -490,7 +507,7 @@ def extract_pmh(text: str):
 
 def extract_psh(text: str):
     explicit = re.search(
-        r'(?:past surgical history|psh)\s*(?:is|:)?\s*(.+?)(?:family history|fh|social history|sh|review of systems|ros|objective|assessment|plan|$)',
+        r"(?:past surgical history|psh)\s*(?:is|:)?\s*(.+?)(?:family history|fh|social history|sh|review of systems|ros|objective|assessment|plan|$)",
         text
     )
     if explicit:
@@ -501,12 +518,14 @@ def extract_psh(text: str):
         "status post colectomy",
         "status post appendectomy",
         "status post cholecystectomy",
+        "status post ercp",
         "prior open colectomy",
         "prior laparotomy",
         "prior abdominal surgery",
         "prior appendectomy",
         "prior cholecystectomy",
         "prior hernia repair",
+        "ercp",
     ]
     found = [p for p in psh_patterns if p in text]
     return ", ".join(sorted(set(found))) if found else None
@@ -514,7 +533,7 @@ def extract_psh(text: str):
 
 def extract_family_history(text: str):
     explicit = re.search(
-        r'(?:family history|fh)\s*(?:is|:)?\s*(.+?)(?:social history|sh|review of systems|ros|objective|assessment|plan|$)',
+        r"(?:family history|fh)\s*(?:is|:)?\s*(.+?)(?:social history|sh|review of systems|ros|objective|assessment|plan|$)",
         text
     )
     if explicit:
@@ -530,7 +549,7 @@ def extract_family_history(text: str):
 
 def extract_social_history(text: str):
     explicit = re.search(
-        r'(?:social history|sh)\s*(?:is|:)?\s*(.+?)(?:review of systems|ros|objective|assessment|plan|$)',
+        r"(?:social history|sh)\s*(?:is|:)?\s*(.+?)(?:review of systems|ros|objective|assessment|plan|$)",
         text
     )
     if explicit:
@@ -583,17 +602,17 @@ def extract_pain_characteristics(text: str, symptoms):
             break
 
     duration_patterns = [
-        r'(\d+\s*hours?\s*ago)',
-        r'(\d+\s*days?\s*ago)',
-        r'(\d+\s*weeks?\s*ago)',
-        r'for\s+(\d+\s*hours?)',
-        r'for\s+(\d+\s*days?)',
-        r'for\s+(\d+\s*weeks?)',
-        r'x\s*(\d+\s*hours?)',
-        r'x\s*(\d+\s*days?)',
-        r'x\s*(\d+\s*weeks?)',
-        r'beginning\s+(\d+\s*hours?\s*ago)',
-        r'starting\s+(\d+\s*hours?\s*ago)',
+        r"(\d+\s*hours?\s*ago)",
+        r"(\d+\s*days?\s*ago)",
+        r"(\d+\s*weeks?\s*ago)",
+        r"for\s+(\d+\s*hours?)",
+        r"for\s+(\d+\s*days?)",
+        r"for\s+(\d+\s*weeks?)",
+        r"x\s*(\d+\s*hours?)",
+        r"x\s*(\d+\s*days?)",
+        r"x\s*(\d+\s*weeks?)",
+        r"beginning\s+(\d+\s*hours?\s*ago)",
+        r"starting\s+(\d+\s*hours?\s*ago)",
     ]
     for pattern in duration_patterns:
         m = re.search(pattern, text)
@@ -602,12 +621,12 @@ def extract_pain_characteristics(text: str, symptoms):
             break
 
     ex_patterns = [
-        r'(worse with [a-z\s]+)',
-        r'(better with [a-z\s]+)',
-        r'(improved with [a-z\s]+)',
-        r'(relieved by [a-z\s]+)',
-        r'(aggravated by [a-z\s]+)',
-        r'(exacerbated by [a-z\s]+)',
+        r"(worse with [a-z\s]+)",
+        r"(better with [a-z\s]+)",
+        r"(improved with [a-z\s]+)",
+        r"(relieved by [a-z\s]+)",
+        r"(aggravated by [a-z\s]+)",
+        r"(exacerbated by [a-z\s]+)",
     ]
     ex_factors = []
     for pattern in ex_patterns:
@@ -704,6 +723,62 @@ def build_hpi_symptom_summary(pain_characteristics):
     return ", ".join(parts) if parts else None
 
 
+def extract_hospital_course(text: str):
+    course = {}
+
+    if "admitted to medicine" in text:
+        course["admission_service"] = "admitted to medicine"
+    elif "admitted to surgery" in text:
+        course["admission_service"] = "admitted to surgery"
+    elif "admitted" in text:
+        course["admission_service"] = "admitted"
+    elif "emergency department" in text:
+        course["admission_service"] = "seen in the emergency department"
+
+    if "hospitalized" in text:
+        course["hospitalized"] = True
+
+    if "recent ercp" in text or "status post ercp" in text or "ercp" in text:
+        course["recent_procedure"] = "recent ERCP"
+
+    if "post ercp pancreatitis" in text or "post-ercp pancreatitis" in text:
+        course["complication"] = "prior post-ERCP pancreatitis"
+
+    return course
+
+
+def extract_formal_exam_defaults(text: str, exam_findings):
+    exam = {
+        "gen": "No acute distress, comfortable",
+        "heent": "Normocephalic, atraumatic",
+        "pulmonary": "Normal work of breathing",
+        "cardiovascular": "Warm and well perfused",
+        "abdomen": "Soft, non-tender, non-distended, no guarding, no hernias or masses appreciated",
+    }
+
+    if "distended" in exam_findings:
+        exam["abdomen"] = "Soft, mildly distended"
+    if "tenderness" in exam_findings:
+        exam["abdomen"] = "Soft, tender to palpation"
+    if "mild_tenderness" in exam_findings:
+        exam["abdomen"] = "Soft, mildly tender to palpation"
+    if "diffuse_tenderness" in exam_findings:
+        exam["abdomen"] = "Soft, mildly diffusely tender to palpation"
+    if "focal_tenderness" in exam_findings and "right lower quadrant" in text:
+        exam["abdomen"] = "Soft, focal right lower quadrant tenderness to palpation"
+    elif "focal_tenderness" in exam_findings:
+        exam["abdomen"] = "Soft, focal tenderness to palpation"
+
+    if "guarding" in exam_findings:
+        exam["abdomen"] = exam["abdomen"].rstrip(".") + ", with guarding"
+    if "rebound" in exam_findings:
+        exam["abdomen"] = exam["abdomen"].rstrip(".") + ", with rebound tenderness"
+    if "no_peritonitis" in exam_findings and "peritonitis" not in exam["abdomen"]:
+        exam["abdomen"] = exam["abdomen"].rstrip(".") + ", no peritonitis"
+
+    return exam
+
+
 def classify_procedure(text: str):
     scores = {}
     for proc, keywords in PROCEDURE_KEYWORDS.items():
@@ -760,6 +835,8 @@ def build_case_facts(raw_input: str):
     pain_characteristics = extract_pain_characteristics(normalized, symptoms)
     ros = extract_ros(normalized, symptoms)
     hpi_symptom_summary = build_hpi_symptom_summary(pain_characteristics)
+    hospital_course = extract_hospital_course(normalized)
+    formal_exam = extract_formal_exam_defaults(normalized, exam_findings)
 
     operative_details = {}
     if ports:
@@ -804,6 +881,10 @@ def build_case_facts(raw_input: str):
         clinical_context["hpi_symptom_summary"] = hpi_symptom_summary
     if ros:
         clinical_context["review_of_systems"] = ros
+    if hospital_course:
+        clinical_context["hospital_course"] = hospital_course
+    if formal_exam:
+        clinical_context["formal_exam"] = formal_exam
 
     assumptions = DEFAULTS.get(procedure, {}).copy()
     needs_review = []

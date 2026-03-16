@@ -1,5 +1,6 @@
 const shorthandEl = document.getElementById("shorthand");
 const outputEl = document.getElementById("output");
+const outputWrapEl = document.getElementById("outputWrap");
 
 const generateBtn = document.getElementById("generateBtn");
 const copyBtn = document.getElementById("copyBtn");
@@ -152,7 +153,7 @@ function templatePlaceholder(noteType) {
     return "Example: Chief Complaint, HPI, Relevant Workup, Assessment, Plan.";
   }
   if (noteType === "consult_note") {
-    return "Example: Reason for Consult, HPI, Exam, Labs/Imaging, Assessment, Recommendations.";
+    return "Example: Reason for Consult, HPI, Past Medical History, Past Surgical History, Family History, Social History, Review of Systems, Objective, Assessment and Plan.";
   }
   return "Paste your preferred template here.";
 }
@@ -317,7 +318,99 @@ if (noteTypeEl) {
   });
 }
 
-/* -------------------- Generate note -------------------- */
+/* -------------------- Generate note (streaming) -------------------- */
+
+async function streamGenerateNote(shorthand, noteType) {
+  const res = await fetch("/generate-note-stream", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      shorthand,
+      note_type: noteType
+    })
+  });
+
+  if (!res.ok) {
+    let errorMessage = "Error generating note.";
+    try {
+      const data = await res.json();
+      errorMessage = data.error || errorMessage;
+    } catch (_) {}
+    throw new Error(errorMessage);
+  }
+
+  if (!res.body) {
+    throw new Error("Streaming not supported in this browser.");
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let streamedText = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+
+    const events = buffer.split("\n\n");
+    buffer = events.pop() || "";
+
+    for (const eventBlock of events) {
+      const lines = eventBlock.split("\n");
+      const dataLines = lines.filter(line => line.startsWith("data: "));
+      if (!dataLines.length) continue;
+
+      const payloadText = dataLines.map(line => line.slice(6)).join("");
+      if (!payloadText) continue;
+
+      let payload;
+      try {
+        payload = JSON.parse(payloadText);
+      } catch (_) {
+        continue;
+      }
+
+      if (payload.type === "meta") {
+        latestProcedure = payload.case_facts?.procedure || "";
+
+        if (procedureBadgeEl && payload.case_facts?.confidence?.procedure !== undefined) {
+          procedureBadgeEl.textContent =
+            `${payload.procedure_label} (confidence: ${payload.case_facts.confidence.procedure})`;
+        }
+
+        if (assumptionsEl) {
+          assumptionsEl.textContent = formatAssumptions(
+            payload.case_facts?.assumptions,
+            payload.case_facts?.needs_review
+          );
+        }
+
+        if (needsReviewEl) {
+          needsReviewEl.textContent = (payload.case_facts?.needs_review || []).join("\n");
+        }
+
+        buildStructuredPreview(payload.case_facts || {}, payload.procedure_label);
+
+        if (metaBox) metaBox.classList.remove("hidden");
+        if (structuredPreviewBox) structuredPreviewBox.classList.remove("hidden");
+      }
+
+      if (payload.type === "delta") {
+        streamedText += payload.delta;
+        outputEl.value = streamedText;
+        outputEl.scrollTop = outputEl.scrollHeight;
+      }
+
+      if (payload.type === "error") {
+        throw new Error(payload.error || "Streaming failed.");
+      }
+    }
+  }
+
+  return streamedText;
+}
 
 if (generateBtn) {
   generateBtn.addEventListener("click", async () => {
@@ -329,65 +422,36 @@ if (generateBtn) {
     }
 
     generateBtn.disabled = true;
+    if (copyBtn) copyBtn.disabled = true;
+    if (emailBtn) emailBtn.disabled = true;
     generateBtn.textContent = "Generating...";
+
     outputEl.value = "";
-    outputEl.classList.add("output-loading");
+    if (outputWrapEl) outputWrapEl.classList.add("output-loading");
 
     if (generatingStatusEl) {
       generatingStatusEl.textContent = "Generating note...";
     }
 
     try {
-      const res = await fetch("/generate-note", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          shorthand,
-          note_type: noteTypeEl ? noteTypeEl.value : "op_note"
-        })
-      });
-
-      const data = await res.json();
-
-      if (data.error) {
-        outputEl.value = data.error;
-        if (generatingStatusEl) generatingStatusEl.textContent = "";
-        return;
-      }
-
-      outputEl.value = data.note || "";
-      latestProcedure = data.case_facts?.procedure || "";
-
-      if (procedureBadgeEl && data.case_facts?.confidence?.procedure !== undefined) {
-        procedureBadgeEl.textContent =
-          `${data.procedure_label} (confidence: ${data.case_facts.confidence.procedure})`;
-      }
-
-      if (assumptionsEl) {
-        assumptionsEl.textContent = formatAssumptions(
-          data.case_facts?.assumptions,
-          data.case_facts?.needs_review
-        );
-      }
-
-      if (needsReviewEl) {
-        needsReviewEl.textContent = (data.case_facts?.needs_review || []).join("\n");
-      }
-
-      buildStructuredPreview(data.case_facts || {}, data.procedure_label);
-
-      if (metaBox) metaBox.classList.remove("hidden");
-      if (structuredPreviewBox) structuredPreviewBox.classList.remove("hidden");
+      await streamGenerateNote(
+        shorthand,
+        noteTypeEl ? noteTypeEl.value : "op_note"
+      );
 
       if (generatingStatusEl) generatingStatusEl.textContent = "";
     } catch (err) {
-      outputEl.value = "Error generating note.";
       console.error(err);
+      if (!outputEl.value.trim()) {
+        outputEl.value = err.message || "Error generating note.";
+      }
       if (generatingStatusEl) generatingStatusEl.textContent = "";
     } finally {
       generateBtn.disabled = false;
+      if (copyBtn) copyBtn.disabled = false;
+      if (emailBtn) emailBtn.disabled = false;
       generateBtn.textContent = "Generate note";
-      outputEl.classList.remove("output-loading");
+      if (outputWrapEl) outputWrapEl.classList.remove("output-loading");
     }
   });
 }

@@ -1558,7 +1558,7 @@ hr {
 /* Generated note output styling */
 .app-output-text {
   font-family: Tahoma, Arial, sans-serif;
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -1568,6 +1568,45 @@ hr {
 }
 
 .output-loading::after {
+  content: "";
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255,255,255,0.22);
+  border-top-color: rgba(255,255,255,0.92);
+  border-radius: 50%;
+  animation: surginote-spin 0.8s linear infinite;
+}
+
+@keyframes surginote-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.generating-status {
+  margin-top: 10px;
+  font-size: 12px;
+  color: rgba(255,255,255,0.72);
+  min-height: 18px;
+}
+
+.app-output-text {
+  font-family: Tahoma, Arial, sans-serif;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.output-wrap {
+  position: relative;
+}
+
+.output-wrap.output-loading::after {
   content: "";
   position: absolute;
   top: 18px;

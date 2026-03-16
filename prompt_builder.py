@@ -67,8 +67,14 @@ The HPI must clearly describe the presenting pain/symptoms and should include, w
 
 If exacerbating or alleviating factors are not mentioned, state that there are no specific exacerbating or alleviating factors.
 
-Example style:
-"The patient reports diffuse, severe, sharp abdominal pain beginning 24 hours ago, associated with non-bloody non-bilious emesis, with no specific exacerbating or alleviating factors."
+After the core symptom description, include a brief hospitalization summary when supported by the source material. This may include:
+- admission service or care setting
+- pertinent lab course
+- pertinent imaging findings
+- pertinent exam findings
+- brief hospital course leading to surgical consultation
+
+Keep this hospitalization summary brief and clinically useful, not repetitive.
 
 History section defaults:
 - If Family History is not explicitly mentioned, write: "Non-contributory."
@@ -82,7 +88,21 @@ Review of Systems requirements:
 Objective requirements:
 - Must include a physical exam under the "Objective" section.
 - Include available vitals, exam findings, labs, and imaging if supported.
-- If details are sparse, provide a focused general surgical exam using only supported or neutral phrasing.
+- The physical exam should be written in formal exam format with separate lines:
+  - Gen:
+  - HEENT:
+  - Pulmonary:
+  - Cardiovascular:
+  - Abdomen:
+- If details are sparse, use the following neutral defaults unless contradicted by the source material:
+  - Gen: No acute distress, comfortable
+  - HEENT: Normocephalic, atraumatic
+  - Pulmonary: Normal work of breathing
+  - Cardiovascular: Warm and well perfused
+- For the abdominal exam:
+  - if abdominal findings are supported, reflect them accurately
+  - if no abnormal abdominal findings are provided, default to:
+    "Soft, non-tender, non-distended, no guarding, no hernias or masses appreciated"
 
 Assessment and Plan brevity requirements:
 - The assessment must be brief: usually 2–3 sentences maximum.
@@ -163,6 +183,7 @@ Additional operative note guidance:
   - Disposition
 - Omit unsupported sections rather than fabricate them.
 """
+
     if note_type == "clinic_note":
         return """
 Additional clinic note guidance:
@@ -181,6 +202,7 @@ Additional clinic note guidance:
 - Do not force physical exam or review of systems unless supported and useful.
 - If the example note has a distinctive clinic flow or plan style, try to match it when appropriate.
 """
+
     if note_type == "consult_note":
         return """
 Additional consult note guidance:
@@ -188,6 +210,27 @@ Additional consult note guidance:
 - Make it clear what question surgery is being asked to address.
 - Use the required consult sections even when the source material is sparse.
 - The Assessment and Plan section is the most important part of the note.
+
+HPI expectations:
+- Start with the symptom story.
+- Then add a brief hospitalization/course summary if available, including service, labs, imaging, and pertinent exam findings.
+- Do not let the HPI become overly long or repetitive.
+
+Objective expectations:
+- Present the physical exam in formal exam format.
+- Prefer separate exam lines:
+  - Gen:
+  - HEENT:
+  - Pulmonary:
+  - Cardiovascular:
+  - Abdomen:
+- If source material is sparse, default to:
+  - Gen: No acute distress, comfortable
+  - HEENT: Normocephalic, atraumatic
+  - Pulmonary: Normal work of breathing
+  - Cardiovascular: Warm and well perfused
+  - Abdomen: Soft, non-tender, non-distended, no guarding, no hernias or masses appreciated
+- If abnormal abdominal findings are present in the source material, replace the abdominal default with supported findings.
 
 Assessment and Plan expectations:
 - Start with a short assessment paragraph, not bullets and not numbering.
@@ -197,7 +240,6 @@ Assessment and Plan expectations:
   - concise clinical reasoning linking the diagnosis to symptoms, exam, labs, and/or imaging
   - the rationale for operative versus nonoperative management
 - Keep the assessment to 2–3 sentences whenever possible.
-- Avoid phrases like "given clinical stability and the plan already in place by medicine, operative management tomorrow is appropriate" when a shorter equivalent will do.
 - Prefer terse attending-style language.
 
 - After the assessment paragraph, leave one blank line.
@@ -208,11 +250,11 @@ Assessment and Plan expectations:
 - Never number the plan.
 
 Examples of preferred bullet style:
-- Proceed with robotic cholecystectomy tomorrow
-- NPO after midnight
-- Pre-op CBC/BMP/LFTs in AM
-- Peri-op antibiotics per protocol
-- Notify surgery for fever, worsening pain, or rising bilirubin
+- Admit to surgery
+- NPO / IV fluids
+- IV antibiotics
+- Serial abdominal exams
+- OR tomorrow
 
 - If the consult is sparse, keep the overall note concise.
 - If the example note has a distinctive consult structure or recommendation style, try to match it when appropriate.
@@ -235,6 +277,7 @@ Before writing the note, internally reason through the following:
 Do not output these reasoning steps.
 Only output the final note.
 """
+
     if note_type == "clinic_note":
         return """
 Before writing the note, internally reason through the following:
@@ -247,6 +290,7 @@ Before writing the note, internally reason through the following:
 Do not output these reasoning steps.
 Only output the final note.
 """
+
     return """
 Before writing the note, internally reason through the following:
 1. What is the key procedural or surgical issue?
