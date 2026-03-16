@@ -44,7 +44,9 @@
     <div class="landing-shell">
 
       <div class="landing-topbar">
-        <div class="brand-logo brand-logo-white">SurgiNote</div>
+        <div class="brand-logo brand-logo-white">
+          SurgiNote <span class="brand-beta">Beta</span>
+        </div>
       </div>
 
       <section class="hero-grid">
@@ -137,12 +139,14 @@ The patient tolerated the procedure well and was transferred to the recovery are
     let i = 0;
     let caretVisible = true;
     let caretInterval = null;
+    let typingTimeout = null;
 
     function renderWithCaret(text) {
       outputEl.textContent = text + (caretVisible ? "▌" : "");
     }
 
     function startCaretBlink(finalText) {
+      if (caretInterval) clearInterval(caretInterval);
       caretInterval = setInterval(() => {
         caretVisible = !caretVisible;
         renderWithCaret(finalText);
@@ -154,16 +158,18 @@ The patient tolerated the procedure well and was transferred to the recovery are
         const currentText = demoText.slice(0, i + 1);
         renderWithCaret(currentText);
         i++;
-        setTimeout(typeDemo, 8);
+        typingTimeout = setTimeout(typeDemo, 8);
       } else {
-        if (caretInterval) clearInterval(caretInterval);
         startCaretBlink(demoText);
       }
     }
 
     window.addEventListener("load", () => {
       i = 0;
+      caretVisible = true;
+
       if (caretInterval) clearInterval(caretInterval);
+      if (typingTimeout) clearTimeout(typingTimeout);
 
       inputEl.style.opacity = 0;
       arrowEl.style.opacity = 0;

@@ -122,8 +122,19 @@ hr {
   font-family: "Arial Rounded MT Bold", "Arial Rounded MT", Arial, sans-serif;
   font-size: 35px;
   font-weight: 700;
-  color: rgba(255,255,255,0.72);
+  color: #ffffff;
   letter-spacing: -0.01em;
+}
+
+.brand-beta {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #F4B942;
+  vertical-align: middle;
 }
 
 .hero-grid {
@@ -253,8 +264,9 @@ hr {
 
 .demo-input {
   min-height: 148px;
-  font-size: 18px;
+  font-size: 16px;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  color: #F4B942;
 }
 
 .demo-output {
@@ -456,7 +468,7 @@ hr {
   font-weight: 700;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.62);
+  color: #F4B942;
 }
 
 .app-header-links {
@@ -572,10 +584,15 @@ hr {
 .app-shorthand {
   min-height: 190px;
   resize: vertical;
-  font-size: 17px;
+  font-size: 15px;
   line-height: 1.65;
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   padding: 20px;
+  color: #F4B942;
+}
+
+.app-shorthand::placeholder {
+  color: rgba(255,255,255,0.42);
 }
 
 .app-feedback-text {
@@ -1348,10 +1365,10 @@ hr {
     font-size: 12px;
   }
 
-  .app-shorthand {
-    min-height: 150px;
-    font-size: 16px;
-  }
+.app-shorthand {
+  min-height: 150px;
+  font-size: 14px;
+}
 
   .login-shell {
     padding: 24px 16px;
