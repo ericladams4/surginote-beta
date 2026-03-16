@@ -24,6 +24,7 @@ ABBREVIATIONS = {
     "llq": "left lower quadrant",
     "luq": "left upper quadrant",
     "n/v": "nausea and vomiting",
+    "n/v/d": "nausea vomiting and diarrhea",
     "sob": "small bowel obstruction",
     "sbo": "small bowel obstruction",
     "appy": "appendicitis",
@@ -35,6 +36,15 @@ ABBREVIATIONS = {
     "ed": "emergency department",
     "fu": "follow up",
     "f/u": "follow up",
+    "nbnb": "non-bloody non-bilious",
+    "n/v nbnb": "nausea and vomiting non-bloody non-bilious",
+    "pmh": "past medical history",
+    "psh": "past surgical history",
+    "fh": "family history",
+    "sh": "social history",
+    "etoh": "alcohol",
+    "tob": "tobacco",
+    "hx": "history",
 }
 
 PROCEDURE_KEYWORDS = {
@@ -123,6 +133,11 @@ SYMPTOM_PATTERNS = {
     ],
     "nausea": ["nausea"],
     "vomiting": ["vomiting", "emesis", "nausea and vomiting"],
+    "non_bloody_non_bilious_emesis": [
+        "non-bloody non-bilious emesis",
+        "non bloody non bilious emesis",
+        "non-bloody non-bilious vomiting",
+    ],
     "distention": ["distention", "abdominal distention", "bloating"],
     "obstipation": ["obstipation"],
     "constipation": ["constipation"],
@@ -131,6 +146,7 @@ SYMPTOM_PATTERNS = {
     "chills": ["chills"],
     "poor_po": ["poor oral intake", "poor po intake", "decreased oral intake"],
     "jaundice": ["jaundice"],
+    "anorexia": ["anorexia", "decreased appetite"],
 }
 
 IMAGING_PATTERNS = {
@@ -171,6 +187,7 @@ PLAN_PATTERNS = {
         "nonoperative management",
         "conservative management",
         "observation",
+        "no acute surgical intervention",
     ],
     "npo": ["npo", "nothing by mouth"],
     "iv_fluids": ["iv fluids"],
@@ -236,6 +253,63 @@ OPERATIVE_PATTERNS = [
     "drain",
     "operative",
 ]
+
+PAIN_LOCATIONS = [
+    "diffuse",
+    "right lower quadrant",
+    "left lower quadrant",
+    "right upper quadrant",
+    "left upper quadrant",
+    "epigastric",
+    "periumbilical",
+    "suprapubic",
+    "generalized",
+    "lower abdomen",
+    "upper abdomen",
+    "abdomen",
+]
+
+PAIN_INTENSITIES = [
+    "mild",
+    "moderate",
+    "severe",
+    "10/10",
+    "9/10",
+    "8/10",
+    "7/10",
+    "6/10",
+    "5/10",
+    "4/10",
+    "3/10",
+    "2/10",
+    "1/10",
+]
+
+PAIN_QUALITIES = [
+    "sharp",
+    "crampy",
+    "cramping",
+    "burning",
+    "stabbing",
+    "aching",
+    "colicky",
+    "pressure",
+]
+
+ASSOCIATED_SYMPTOM_MAP = {
+    "nausea": "nausea",
+    "vomiting": "vomiting",
+    "non_bloody_non_bilious_emesis": "non-bloody non-bilious emesis",
+    "distention": "abdominal distention",
+    "obstipation": "obstipation",
+    "constipation": "constipation",
+    "diarrhea": "diarrhea",
+    "fever": "fever",
+    "chills": "chills",
+    "poor_po": "decreased oral intake",
+    "jaundice": "jaundice",
+    "anorexia": "decreased appetite",
+}
 
 
 def normalize_text(text: str) -> str:
@@ -337,16 +411,13 @@ def extract_plans(text: str):
 
 
 def extract_consult_question(text: str):
-    if "consulted for" in text:
-        m = re.search(r'consulted for (.+?)(?: with | ct | wbc | surgery |$)', text)
-        if m:
-            return m.group(1).strip()
-    if "reason for consult" in text:
-        m = re.search(r'reason for consult (.+?)(?: with | ct | wbc | surgery |$)', text)
-        if m:
-            return m.group(1).strip()
-    if "surgery consulted for" in text:
-        m = re.search(r'surgery consulted for (.+?)(?: with | ct | wbc | surgery |$)', text)
+    patterns = [
+        r'surgery consulted for (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)',
+        r'consulted for (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)',
+        r'reason for consult (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)',
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, text)
         if m:
             return m.group(1).strip()
     return None
@@ -362,6 +433,10 @@ def extract_lab_data(text: str):
     lactate = re.search(r'lactate\s*(?:of|=)?\s*(\d+(\.\d+)?)', text)
     if lactate:
         labs["lactate"] = lactate.group(1)
+
+    hgb = re.search(r'hgb\s*(?:of|=)?\s*(\d+(\.\d+)?)', text)
+    if hgb:
+        labs["hgb"] = hgb.group(1)
 
     if "labs within normal limits" in text or "labs wnl" in text or "within normal limits" in text:
         labs["labs_summary"] = "within normal limits"
@@ -379,8 +454,11 @@ def extract_exam_findings(text: str):
         ("mild_tenderness", "mild tenderness"),
         ("diffuse_tenderness", "diffuse tenderness"),
         ("focal_tenderness", "focal tenderness"),
+        ("rebound", "rebound"),
+        ("guarding", "guarding"),
         ("distended", "distended"),
         ("soft", "soft"),
+        ("non_toxic", "non toxic"),
     ]
 
     for key, phrase in patterns:
@@ -388,6 +466,242 @@ def extract_exam_findings(text: str):
             findings.append(key)
 
     return findings
+
+
+def extract_pmh(text: str):
+    explicit = re.search(
+        r'(?:past medical history|pmh)\s*(?:is|:)?\s*(.+?)(?:past surgical history|psh|family history|fh|social history|sh|review of systems|ros|objective|assessment|plan|$)',
+        text
+    )
+    if explicit:
+        return explicit.group(1).strip()
+
+    pmh_terms = [
+        "diabetes", "hypertension", "hyperlipidemia", "coronary artery disease",
+        "cad", "atrial fibrillation", "afib", "copd", "asthma", "gerd",
+        "cirrhosis", "ckd", "chronic kidney disease", "heart failure",
+        "congestive heart failure", "cancer", "malignancy", "obesity",
+        "diverticulitis", "gallstones", "cholelithiasis", "appendicitis",
+        "small bowel obstruction", "crohn", "ulcerative colitis"
+    ]
+    found = [term for term in pmh_terms if term in text]
+    return ", ".join(sorted(set(found))) if found else None
+
+
+def extract_psh(text: str):
+    explicit = re.search(
+        r'(?:past surgical history|psh)\s*(?:is|:)?\s*(.+?)(?:family history|fh|social history|sh|review of systems|ros|objective|assessment|plan|$)',
+        text
+    )
+    if explicit:
+        return explicit.group(1).strip()
+
+    psh_patterns = [
+        "status post open colectomy",
+        "status post colectomy",
+        "status post appendectomy",
+        "status post cholecystectomy",
+        "prior open colectomy",
+        "prior laparotomy",
+        "prior abdominal surgery",
+        "prior appendectomy",
+        "prior cholecystectomy",
+        "prior hernia repair",
+    ]
+    found = [p for p in psh_patterns if p in text]
+    return ", ".join(sorted(set(found))) if found else None
+
+
+def extract_family_history(text: str):
+    explicit = re.search(
+        r'(?:family history|fh)\s*(?:is|:)?\s*(.+?)(?:social history|sh|review of systems|ros|objective|assessment|plan|$)',
+        text
+    )
+    if explicit:
+        value = explicit.group(1).strip()
+        if value:
+            return value
+
+    if "family history non contributory" in text or "family history non-contributory" in text:
+        return "Non-contributory."
+
+    return None
+
+
+def extract_social_history(text: str):
+    explicit = re.search(
+        r'(?:social history|sh)\s*(?:is|:)?\s*(.+?)(?:review of systems|ros|objective|assessment|plan|$)',
+        text
+    )
+    if explicit:
+        value = explicit.group(1).strip()
+        if value:
+            return value
+
+    pieces = []
+
+    if "denies alcohol" in text or "no alcohol" in text:
+        pieces.append("Denies alcohol use")
+    elif "alcohol use" in text:
+        pieces.append("Alcohol use")
+
+    if "denies tobacco" in text or "no tobacco" in text or "non smoker" in text or "nonsmoker" in text:
+        pieces.append("Denies tobacco use")
+    elif "tobacco use" in text or "smoker" in text:
+        pieces.append("Tobacco use")
+
+    if "denies drug use" in text or "no drug use" in text:
+        pieces.append("Denies drug use")
+    elif "drug use" in text or "illicit drug use" in text:
+        pieces.append("Drug use")
+
+    if pieces:
+        return ", ".join(pieces) + "."
+
+    return None
+
+
+def extract_pain_characteristics(text: str, symptoms):
+    pain = {}
+
+    if "pain" not in text and "abdominal pain" not in text:
+        return pain
+
+    for location in PAIN_LOCATIONS:
+        if location in text:
+            pain["location"] = location
+            break
+
+    for intensity in PAIN_INTENSITIES:
+        if intensity in text:
+            pain["intensity"] = intensity
+            break
+
+    for quality in PAIN_QUALITIES:
+        if quality in text:
+            pain["quality"] = quality
+            break
+
+    duration_patterns = [
+        r'(\d+\s*hours?\s*ago)',
+        r'(\d+\s*days?\s*ago)',
+        r'(\d+\s*weeks?\s*ago)',
+        r'for\s+(\d+\s*hours?)',
+        r'for\s+(\d+\s*days?)',
+        r'for\s+(\d+\s*weeks?)',
+        r'x\s*(\d+\s*hours?)',
+        r'x\s*(\d+\s*days?)',
+        r'x\s*(\d+\s*weeks?)',
+        r'beginning\s+(\d+\s*hours?\s*ago)',
+        r'starting\s+(\d+\s*hours?\s*ago)',
+    ]
+    for pattern in duration_patterns:
+        m = re.search(pattern, text)
+        if m:
+            pain["duration"] = m.group(1).strip()
+            break
+
+    ex_patterns = [
+        r'(worse with [a-z\s]+)',
+        r'(better with [a-z\s]+)',
+        r'(improved with [a-z\s]+)',
+        r'(relieved by [a-z\s]+)',
+        r'(aggravated by [a-z\s]+)',
+        r'(exacerbated by [a-z\s]+)',
+    ]
+    ex_factors = []
+    for pattern in ex_patterns:
+        matches = re.findall(pattern, text)
+        ex_factors.extend(matches)
+    if ex_factors:
+        pain["modifying_factors"] = "; ".join(sorted(set(ex_factors)))
+    else:
+        pain["modifying_factors"] = "no specific exacerbating or alleviating factors"
+
+    assoc = []
+    for key in symptoms:
+        if key in ASSOCIATED_SYMPTOM_MAP:
+            assoc.append(ASSOCIATED_SYMPTOM_MAP[key])
+    if assoc:
+        pain["associated_symptoms"] = sorted(set(assoc))
+
+    return pain
+
+
+def extract_ros(text, symptoms):
+    ros = {
+        "constitutional": "Negative except as noted in HPI.",
+        "cardiovascular": "Negative.",
+        "respiratory": "Negative.",
+        "genitourinary": "Negative.",
+        "neurologic": "Negative.",
+    }
+
+    gi_parts = []
+    if "abdominal_pain" in symptoms:
+        gi_parts.append("abdominal pain")
+    if "nausea" in symptoms:
+        gi_parts.append("nausea")
+    if "vomiting" in symptoms:
+        gi_parts.append("vomiting")
+    if "non_bloody_non_bilious_emesis" in symptoms:
+        gi_parts.append("non-bloody non-bilious emesis")
+    if "distention" in symptoms:
+        gi_parts.append("abdominal distention")
+    if "obstipation" in symptoms:
+        gi_parts.append("obstipation")
+    if "constipation" in symptoms:
+        gi_parts.append("constipation")
+    if "diarrhea" in symptoms:
+        gi_parts.append("diarrhea")
+    if "poor_po" in symptoms:
+        gi_parts.append("decreased oral intake")
+    if "jaundice" in symptoms:
+        gi_parts.append("jaundice")
+
+    if gi_parts:
+        ros["gastrointestinal"] = "Positive for " + ", ".join(sorted(set(gi_parts))) + "."
+    else:
+        ros["gastrointestinal"] = "Negative."
+
+    if "fever" in symptoms or "chills" in symptoms:
+        const_parts = []
+        if "fever" in symptoms:
+            const_parts.append("fever")
+        if "chills" in symptoms:
+            const_parts.append("chills")
+        ros["constitutional"] = "Positive for " + ", ".join(const_parts) + "."
+
+    return ros
+
+
+def build_hpi_symptom_summary(pain_characteristics):
+    if not pain_characteristics:
+        return None
+
+    parts = []
+
+    location = pain_characteristics.get("location")
+    intensity = pain_characteristics.get("intensity")
+    quality = pain_characteristics.get("quality")
+
+    descriptor_bits = [bit for bit in [location, intensity, quality] if bit]
+    if descriptor_bits:
+        parts.append(" ".join(descriptor_bits) + " pain")
+
+    duration = pain_characteristics.get("duration")
+    if duration:
+        parts.append(f"starting {duration}")
+
+    assoc = pain_characteristics.get("associated_symptoms") or []
+    if assoc:
+        parts.append("associated with " + ", ".join(assoc))
+
+    modifying = pain_characteristics.get("modifying_factors")
+    if modifying:
+        parts.append(modifying)
+
+    return ", ".join(parts) if parts else None
 
 
 def classify_procedure(text: str):
@@ -439,6 +753,13 @@ def build_case_facts(raw_input: str):
     consult_question = extract_consult_question(normalized)
     labs = extract_lab_data(normalized)
     exam_findings = extract_exam_findings(normalized)
+    pmh = extract_pmh(normalized)
+    psh = extract_psh(normalized)
+    family_history = extract_family_history(normalized)
+    social_history = extract_social_history(normalized)
+    pain_characteristics = extract_pain_characteristics(normalized, symptoms)
+    ros = extract_ros(normalized, symptoms)
+    hpi_symptom_summary = build_hpi_symptom_summary(pain_characteristics)
 
     operative_details = {}
     if ports:
@@ -469,6 +790,20 @@ def build_case_facts(raw_input: str):
         clinical_context["labs"] = labs
     if exam_findings:
         clinical_context["exam_findings"] = exam_findings
+    if pmh:
+        clinical_context["past_medical_history"] = pmh
+    if psh:
+        clinical_context["past_surgical_history"] = psh
+    if family_history:
+        clinical_context["family_history"] = family_history
+    if social_history:
+        clinical_context["social_history"] = social_history
+    if pain_characteristics:
+        clinical_context["pain_characteristics"] = pain_characteristics
+    if hpi_symptom_summary:
+        clinical_context["hpi_symptom_summary"] = hpi_symptom_summary
+    if ros:
+        clinical_context["review_of_systems"] = ros
 
     assumptions = DEFAULTS.get(procedure, {}).copy()
     needs_review = []
@@ -487,6 +822,15 @@ def build_case_facts(raw_input: str):
 
     if note_context == "consult_note" and not plans:
         needs_review.append("Plan/recommendation not explicit")
+
+    if note_context == "consult_note" and not family_history:
+        assumptions["family_history_default"] = "Non-contributory."
+
+    if note_context == "consult_note" and not social_history:
+        assumptions["social_history_default"] = "Denies alcohol use, tobacco use, drug use."
+
+    if note_context == "consult_note" and not pain_characteristics.get("modifying_factors"):
+        assumptions["modifying_factors_default"] = "no specific exacerbating or alleviating factors"
 
     if any(p in normalized for p in NONOPERATIVE_PATTERNS):
         assumptions["management_direction"] = "nonoperative"
