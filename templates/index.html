@@ -1,147 +1,216 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SurgiNote Beta</title>
-  <link rel="stylesheet" href="/static/style.css" />
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SurgiNote Beta</title>
+<link rel="stylesheet" href="/static/style.css" />
 </head>
+
 <body class="app-page">
 
-  <div class="app-overlay">
-    <main class="app-shell">
+<div class="app-overlay">
+<main class="app-shell">
 
-      <header class="app-header">
-        <div class="app-brand">
-          <div class="app-logo">SurgiNote</div>
-          <div class="app-product-tag">Beta</div>
-        </div>
+<header class="app-header">
 
-        <a href="/logout" class="app-logout">Log out</a>
-      </header>
+<div class="app-brand">
+<div class="app-logo">SurgiNote</div>
+<div class="app-product-tag">Beta</div>
+</div>
 
-      <section class="app-grid">
+<div class="app-header-links">
 
-        <div class="app-left-column">
-          <div class="app-card app-input-card">
-            <div class="card-label">Note type</div>
-            <p class="card-helper">Choose the type of note you want to generate.</p>
+<button id="openFeedbackBtn" class="app-header-link-button">
+Feedback
+</button>
 
-            <div class="card-action-row">
-              <select id="noteType" class="app-select">
-                <option value="op_note">Op Note</option>
-                <option value="clinic_note">Clinic Note</option>
-                <option value="consult_note">Consult Note</option>
-              </select>
-            </div>
+<button id="openTemplateSettingsBtn" class="app-header-link-button">
+Templates
+</button>
 
-            <div class="card-label" style="margin-top: 18px;">Enter shorthand</div>
-            <p class="card-helper">Describe the encounter in shorthand or free text.</p>
+<a href="/logout" class="app-logout">Log out</a>
 
-            <textarea
-              id="shorthand"
-              class="app-shorthand"
-              rows="7"
-              placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Lap chole 3 ports uncomplicated."
-            ></textarea>
+</div>
+</header>
 
-            <div class="card-action-row">
-              <button id="generateBtn" class="primary-action">Generate note</button>
-            </div>
-          </div>
+<section class="app-grid">
 
-          <div class="app-card">
-            <div class="card-label" id="templateHeading">Template for Op Note</div>
-            <p class="card-helper">Paste or edit your preferred template for this note type.</p>
+<div class="app-left-column">
 
-            <textarea
-              id="templateEditor"
-              class="app-feedback-text"
-              rows="10"
-              placeholder="Paste your preferred template here. SurgiNote will use its structure, headings, and style."
-            ></textarea>
+<div class="app-card app-input-card">
 
-            <div class="card-action-row">
-              <button id="saveTemplateBtn" class="primary-action">Save template</button>
-              <button id="deleteTemplateBtn" class="secondary-action" type="button">Delete template</button>
-            </div>
+<div class="card-label">Note type</div>
+<p class="card-helper">Choose the type of note you want to generate.</p>
 
-            <div id="templateStatus" class="feedback-status"></div>
-          </div>
+<div class="card-action-row">
+<select id="noteType" class="app-select">
+<option value="op_note">Op Note</option>
+<option value="clinic_note">Clinic Note</option>
+<option value="consult_note">Consult Note</option>
+</select>
+</div>
 
-          <section id="structuredPreviewBox" class="app-card hidden">
-            <div class="card-label">Structured surgical fields</div>
-            <div id="structuredPreview" class="structured-preview-grid"></div>
-          </section>
+<div class="card-label" style="margin-top:18px;">Enter shorthand</div>
+<p class="card-helper">Describe the encounter in shorthand or free text.</p>
 
-          <section id="metaBox" class="app-card hidden">
-            <div class="meta-section">
-              <div class="card-label">Detected procedure</div>
-              <div id="procedureBadge" class="procedure-badge"></div>
-            </div>
+<textarea
+id="shorthand"
+class="app-shorthand"
+rows="7"
+placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Lap chole 3 ports uncomplicated."
+></textarea>
 
-            <div class="meta-section">
-              <div class="card-label">Assumptions used</div>
-              <pre id="assumptions" class="meta-pre"></pre>
-            </div>
+<div class="card-action-row">
+<button id="generateBtn" class="primary-action">
+Generate note
+</button>
+</div>
 
-            <div class="meta-section">
-              <div class="card-label">Needs review</div>
-              <pre id="needsReview" class="meta-pre"></pre>
-            </div>
-          </section>
-        </div>
+</div>
+</div>
 
-        <div class="app-right-column">
-          <div class="app-card app-output-card">
-            <div class="output-header">
-              <div class="output-header-copy">
-                <div class="card-label" id="outputLabel">Generated Op Note</div>
-                <p class="card-helper subtle-light">Review and edit before use.</p>
-              </div>
+<div class="app-right-column">
 
-              <div class="output-actions">
-                <button id="copyBtn" class="secondary-action">Copy</button>
-                <button id="emailBtn" class="secondary-action">Email draft</button>
-              </div>
-            </div>
+<div class="app-card app-output-card">
 
-            <div id="generatingStatus" class="generating-status"></div>
+<div class="output-header">
 
-            <div id="outputWrap" class="output-wrap">
-              <textarea id="output" class="app-output-text" rows="22"></textarea>
-            </div>
-          </div>
+<div class="output-header-copy">
+<div class="card-label" id="outputLabel">
+Generated Op Note
+</div>
+<p class="card-helper subtle-light">
+Review and edit before use.
+</p>
+</div>
 
-          <div class="app-card app-feedback-card">
-            <div class="card-label">Feedback</div>
+<div class="output-actions">
+<button id="copyBtn" class="secondary-action">
+Copy
+</button>
+<button id="emailBtn" class="secondary-action">
+Email draft
+</button>
+</div>
 
-            <select id="rating" class="app-select">
-              <option value="">Select one</option>
-              <option value="usable_as_is">Usable as-is</option>
-              <option value="small_edits">Needed small edits</option>
-              <option value="major_edits">Needed major edits</option>
-              <option value="wrong_or_unsafe">Wrong / unsafe</option>
-            </select>
+</div>
 
-            <textarea
-              id="comment"
-              class="app-feedback-text"
-              rows="4"
-              placeholder="Optional comment"
-            ></textarea>
+<div id="generatingStatus" class="generating-status"></div>
 
-            <div class="card-action-row">
-              <button id="feedbackBtn" class="primary-action feedback-action">Submit feedback</button>
-            </div>
-            <div id="feedbackStatus" class="feedback-status"></div>
-          </div>
-        </div>
+<div id="outputWrap" class="output-wrap">
+<textarea id="output" class="app-output-text" rows="22"></textarea>
+</div>
 
-      </section>
-    </main>
-  </div>
+</div>
 
-  <script src="/static/app.js"></script>
+</div>
+
+</section>
+</main>
+</div>
+
+<!-- TEMPLATE MODAL -->
+
+<div id="templateModal" class="template-modal-overlay hidden">
+
+<div class="template-modal-card">
+
+<div class="template-modal-header">
+
+<div>
+<div class="card-label" id="templateHeading">
+Template for Op Note
+</div>
+<p class="card-helper">
+Paste or edit your preferred template for this note type.
+</p>
+</div>
+
+<button id="closeTemplateModalBtn" class="template-modal-close">
+×
+</button>
+
+</div>
+
+<textarea
+id="templateEditor"
+class="app-feedback-text template-modal-editor"
+rows="14"
+placeholder="Paste your preferred template here."
+></textarea>
+
+<div class="card-action-row template-modal-actions">
+
+<button id="saveTemplateBtn" class="primary-action">
+Save template
+</button>
+
+<button id="deleteTemplateBtn" class="secondary-action">
+Delete template
+</button>
+
+</div>
+
+<div id="templateStatus" class="feedback-status"></div>
+
+</div>
+</div>
+
+<!-- FEEDBACK MODAL -->
+
+<div id="feedbackModal" class="template-modal-overlay hidden">
+
+<div class="template-modal-card">
+
+<div class="template-modal-header">
+
+<div>
+<div class="card-label">
+Feedback
+</div>
+<p class="card-helper">
+Help improve SurgiNote.
+</p>
+</div>
+
+<button id="closeFeedbackModalBtn" class="template-modal-close">
+×
+</button>
+
+</div>
+
+<select id="rating" class="app-select">
+
+<option value="">Select one</option>
+<option value="usable_as_is">Usable as-is</option>
+<option value="small_edits">Needed small edits</option>
+<option value="major_edits">Needed major edits</option>
+<option value="wrong_or_unsafe">Wrong / unsafe</option>
+
+</select>
+
+<textarea
+id="comment"
+class="app-feedback-text"
+rows="4"
+placeholder="Optional comment"
+></textarea>
+
+<div class="card-action-row">
+
+<button id="feedbackBtn" class="primary-action">
+Submit feedback
+</button>
+
+</div>
+
+<div id="feedbackStatus" class="feedback-status"></div>
+
+</div>
+</div>
+
+<script src="/static/app.js"></script>
+
 </body>
 </html>

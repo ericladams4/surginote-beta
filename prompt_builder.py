@@ -1,10 +1,33 @@
 import json
+import re
 
 NOTE_TYPE_LABELS = {
     "op_note": "operative note",
     "clinic_note": "clinic note",
     "consult_note": "consult note",
 }
+
+SUPPORTED_TEMPLATE_PLACEHOLDERS = {
+    "reason_for_consult",
+    "hpi",
+    "pmh",
+    "psh",
+    "fh",
+    "sh",
+    "ros",
+    "objective",
+    "assessment",
+    "plan",
+    "procedure",
+    "findings",
+    "description_of_procedure",
+    "specimen",
+    "estimated_blood_loss",
+    "drains",
+    "complications",
+    "disposition",
+}
+
 
 NOTE_TYPE_INSTRUCTIONS = {
     "op_note": """
@@ -37,7 +60,7 @@ Preferred style:
     "consult_note": """
 Generate a concise but complete surgical consult note appropriate for an inpatient or ED consultation.
 
-Consult note sections must appear in this order:
+Consult note sections must appear in this order unless a valid placeholder template explicitly rearranges them:
 - Reason for Consult
 - HPI
 - Past Medical History
@@ -158,6 +181,13 @@ Dynamic formatting rules:
 - Prefer realistic clinical formatting over completeness for its own sake.
 - The note should feel like something a practicing surgeon would actually write in workflow.
 """
+
+
+def _extract_template_placeholders(template_content: str):
+    if not template_content:
+        return []
+    found = re.findall(r"\{([a-zA-Z0-9_]+)\}", template_content)
+    return [p for p in found if p in SUPPORTED_TEMPLATE_PLACEHOLDERS]
 
 
 def _build_note_specific_guidance(note_type: str) -> str:
@@ -303,6 +333,63 @@ Only output the final note.
 """
 
 
+def _build_placeholder_mode_guidance(note_type: str, template_content: str) -> str:
+    placeholders = _extract_template_placeholders(template_content)
+    if not placeholders:
+        return ""
+
+    placeholder_list = ", ".join(f"{{{p}}}" for p in placeholders)
+
+    consult_specific = ""
+    if note_type == "consult_note":
+        consult_specific = """
+Special consult placeholder rules:
+- {assessment} must contain only the short assessment paragraph.
+- {plan} must contain bullet points only, not numbered items.
+- {objective} should contain the formal exam and any relevant vitals/labs/imaging summary if appropriate.
+- {fh} should default to "Non-contributory." if family history is not given.
+- {sh} should default to "Denies alcohol use, tobacco use, drug use." if social history is not given.
+"""
+
+    return f"""
+The user template contains placeholders and should be treated as a fillable template.
+
+Detected placeholders:
+{placeholder_list}
+
+Instructions for placeholder mode:
+- Output the final note using the user's template structure as closely as possible.
+- Replace each supported placeholder with generated content appropriate to the current case.
+- Preserve the template's headings, layout, and overall style whenever safe and appropriate.
+- Do not leave supported placeholders unfilled if the section can be generated.
+- Do not output braces or placeholder names in the final note.
+- If a placeholder section is unsupported by the source material, use neutral/default wording only when allowed by the note rules; otherwise keep the content concise and non-fabricated.
+- Do not copy stale or irrelevant content from the example template.
+
+Supported placeholders:
+- {{reason_for_consult}}
+- {{hpi}}
+- {{pmh}}
+- {{psh}}
+- {{fh}}
+- {{sh}}
+- {{ros}}
+- {{objective}}
+- {{assessment}}
+- {{plan}}
+- {{procedure}}
+- {{findings}}
+- {{description_of_procedure}}
+- {{specimen}}
+- {{estimated_blood_loss}}
+- {{drains}}
+- {{complications}}
+- {{disposition}}
+
+{consult_specific}
+"""
+
+
 def build_prompt(case_facts, note_type="op_note", template_content=None):
     note_type = note_type if note_type in NOTE_TYPE_LABELS else "op_note"
     note_label = NOTE_TYPE_LABELS[note_type]
@@ -314,8 +401,12 @@ def build_prompt(case_facts, note_type="op_note", template_content=None):
 
     template_section = ""
     if template_content:
+        placeholder_guidance = _build_placeholder_mode_guidance(note_type, template_content)
+
         template_section = f"""
 {TEMPLATE_GUIDANCE}
+
+{placeholder_guidance}
 
 USER TEMPLATE / EXAMPLE NOTE:
 {template_content}

@@ -11,23 +11,44 @@ const commentEl = document.getElementById("comment");
 const feedbackBtn = document.getElementById("feedbackBtn");
 const feedbackStatus = document.getElementById("feedbackStatus");
 
-const metaBox = document.getElementById("metaBox");
-const assumptionsEl = document.getElementById("assumptions");
-const needsReviewEl = document.getElementById("needsReview");
-const procedureBadgeEl = document.getElementById("procedureBadge");
-
-const structuredPreviewBox = document.getElementById("structuredPreviewBox");
-const structuredPreviewEl = document.getElementById("structuredPreview");
-
 const generatingStatusEl = document.getElementById("generatingStatus");
 
 const noteTypeEl = document.getElementById("noteType");
-const templateHeadingEl = document.getElementById("templateHeading");
 const outputLabelEl = document.getElementById("outputLabel");
+
+/* -------------------- Template settings / modal -------------------- */
+
+const openTemplateSettingsBtn = document.getElementById("openTemplateSettingsBtn");
+const templateModalEl = document.getElementById("templateModal");
+const closeTemplateModalBtn = document.getElementById("closeTemplateModalBtn");
+
+const templateHeadingEl = document.getElementById("templateHeading");
 const templateEditorEl = document.getElementById("templateEditor");
 const saveTemplateBtn = document.getElementById("saveTemplateBtn");
 const deleteTemplateBtn = document.getElementById("deleteTemplateBtn");
 const templateStatusEl = document.getElementById("templateStatus");
+
+const openFeedbackBtn = document.getElementById("openFeedbackBtn");
+const feedbackModal = document.getElementById("feedbackModal");
+const closeFeedbackModalBtn = document.getElementById("closeFeedbackModalBtn");
+
+function openFeedbackModal() {
+feedbackModal.classList.remove("hidden");
+document.body.classList.add("modal-open");
+}
+
+function closeFeedbackModal() {
+feedbackModal.classList.add("hidden");
+document.body.classList.remove("modal-open");
+}
+
+if (openFeedbackBtn) {
+openFeedbackBtn.addEventListener("click", openFeedbackModal);
+}
+
+if (closeFeedbackModalBtn) {
+closeFeedbackModalBtn.addEventListener("click", closeFeedbackModal);
+}
 
 let latestProcedure = "";
 let currentLoadedTemplate = "";
@@ -40,74 +61,6 @@ function humanizeKey(key) {
   return String(key)
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function formatValue(value) {
-  if (value === true) return "Yes";
-  if (value === false) return "No";
-  if (value === null || value === undefined || value === "") return "—";
-  return String(value);
-}
-
-function formatAssumptions(assumptions, needsReview) {
-  const lines = [];
-
-  for (const [key, value] of Object.entries(assumptions || {})) {
-    lines.push(`${humanizeKey(key)}: ${formatValue(value)}`);
-  }
-
-  if ((needsReview || []).length > 0) {
-    lines.push("");
-    lines.push("Review needed:");
-    for (const item of needsReview) {
-      lines.push(`- ${item}`);
-    }
-  }
-
-  return lines.join("\n");
-}
-
-function buildStructuredPreview(caseFacts, procedureLabel) {
-  if (!structuredPreviewEl) return;
-
-  const demographics = caseFacts.demographics || {};
-  const operative = caseFacts.operative_details || {};
-  const assumptions = caseFacts.assumptions || {};
-  const rows = [];
-
-  rows.push(["Procedure", procedureLabel || "Unknown"]);
-
-  if (demographics.age || demographics.sex) {
-    const ageSex = [
-      demographics.age ? `${demographics.age}` : null,
-      demographics.sex ? humanizeKey(demographics.sex) : null
-    ].filter(Boolean).join(" / ");
-    rows.push(["Patient", ageSex]);
-  }
-
-  if (operative.laterality) rows.push(["Laterality", humanizeKey(operative.laterality)]);
-  if (operative.defect_type) rows.push(["Defect type", humanizeKey(operative.defect_type)]);
-  if (operative.ports) rows.push(["Ports", `${operative.ports}`]);
-  if (operative.complexity) rows.push(["Complexity", humanizeKey(operative.complexity)]);
-  if (operative.mesh_mentioned !== undefined) {
-    rows.push(["Mesh mentioned", formatValue(operative.mesh_mentioned)]);
-  }
-
-  for (const [key, value] of Object.entries(assumptions)) {
-    rows.push([humanizeKey(key), formatValue(value)]);
-  }
-
-  if (rows.length === 0) {
-    structuredPreviewEl.innerHTML = `<div class="structured-empty">No structured fields available yet.</div>`;
-    return;
-  }
-
-  structuredPreviewEl.innerHTML = rows.map(([label, value]) => `
-    <div class="structured-field">
-      <div class="structured-field-label">${label}</div>
-      <div class="structured-field-value">${value}</div>
-    </div>
-  `).join("");
 }
 
 async function copyTextWithFallback(text) {
@@ -136,8 +89,6 @@ async function copyTextWithFallback(text) {
   }
 }
 
-/* -------------------- Note type / template UX -------------------- */
-
 function noteTypeLabel(noteType) {
   if (noteType === "op_note") return "Op Note";
   if (noteType === "clinic_note") return "Clinic Note";
@@ -147,13 +98,13 @@ function noteTypeLabel(noteType) {
 
 function templatePlaceholder(noteType) {
   if (noteType === "op_note") {
-    return "Example: Preoperative Diagnosis, Postoperative Diagnosis, Procedure, Findings, Description of Procedure, EBL, Specimen, Drains, Complications.";
+    return "Example:\n\nPreoperative Diagnosis:\nPostoperative Diagnosis:\nProcedure:\nFindings:\nDescription of Procedure:\nEstimated Blood Loss:\nSpecimen:\nDrains:\nComplications:\nDisposition:";
   }
   if (noteType === "clinic_note") {
-    return "Example: Chief Complaint, HPI, Relevant Workup, Assessment, Plan.";
+    return "Example:\n\nChief Complaint:\nHPI:\nRelevant Workup:\nAssessment:\nPlan:";
   }
   if (noteType === "consult_note") {
-    return "Example: Reason for Consult, HPI, Past Medical History, Past Surgical History, Family History, Social History, Review of Systems, Objective, Assessment and Plan.";
+    return "Example:\n\nReason for Consult:\n{reason_for_consult}\n\nHPI:\n{hpi}\n\nPast Medical History:\n{pmh}\n\nPast Surgical History:\n{psh}\n\nFamily History:\n{fh}\n\nSocial History:\n{sh}\n\nReview of Systems:\n{ros}\n\nObjective:\n{objective}\n\nAssessment and Plan:\n{assessment}\n\n{plan}";
   }
   return "Paste your preferred template here.";
 }
@@ -166,7 +117,7 @@ function shorthandPlaceholder(noteType) {
     return "52yoF seen for symptomatic cholelithiasis. Intermittent RUQ pain after meals x 4 months. Ultrasound with gallstones. Discussed laparoscopic cholecystectomy, risks/benefits reviewed, patient wishes to proceed.";
   }
   if (noteType === "consult_note") {
-    return "67yoM admitted with SBO. Surgery consulted for abdominal pain, distention, emesis. CT with transition point in mid abdomen. Mild tenderness, no peritonitis. Recommend nonoperative management with bowel rest, IVF, serial abdominal exams.";
+    return "67yoM admitted to medicine. Surgery consulted for abdominal pain and emesis. Diffuse severe sharp abdominal pain starting 24 hours ago associated with non-bloody non-bilious emesis, no specific exacerbating or alleviating factors. CT with SBO and transition point. Mild diffuse tenderness, no peritonitis. Recommend bowel rest, IVF, serial abdominal exams.";
   }
   return "Describe the encounter in shorthand or free text.";
 }
@@ -176,12 +127,12 @@ function updateNoteTypeLabels() {
 
   const label = noteTypeLabel(noteTypeEl.value);
 
-  if (templateHeadingEl) {
-    templateHeadingEl.textContent = `Template for ${label}`;
-  }
-
   if (outputLabelEl) {
     outputLabelEl.textContent = `Generated ${label}`;
+  }
+
+  if (templateHeadingEl) {
+    templateHeadingEl.textContent = `Template for ${label}`;
   }
 
   if (templateEditorEl) {
@@ -197,6 +148,59 @@ function hasUnsavedTemplateChanges() {
   if (!templateEditorEl) return false;
   return templateEditorEl.value.trim() !== (currentLoadedTemplate || "").trim();
 }
+
+/* -------------------- Template modal controls -------------------- */
+
+function openTemplateModal() {
+  if (!templateModalEl) return;
+  templateModalEl.classList.remove("hidden");
+  document.body.classList.add("modal-open");
+}
+
+function closeTemplateModal() {
+  if (!templateModalEl) return;
+  templateModalEl.classList.add("hidden");
+  document.body.classList.remove("modal-open");
+}
+
+if (openTemplateSettingsBtn) {
+  openTemplateSettingsBtn.addEventListener("click", async () => {
+    await loadTemplate();
+    openTemplateModal();
+  });
+}
+
+if (closeTemplateModalBtn) {
+  closeTemplateModalBtn.addEventListener("click", () => {
+    if (hasUnsavedTemplateChanges()) {
+      const confirmed = window.confirm("You have unsaved template changes. Close anyway?");
+      if (!confirmed) return;
+    }
+    closeTemplateModal();
+  });
+}
+
+if (templateModalEl) {
+  templateModalEl.addEventListener("click", (e) => {
+    if (e.target === templateModalEl) {
+      if (hasUnsavedTemplateChanges()) {
+        const confirmed = window.confirm("You have unsaved template changes. Close anyway?");
+        if (!confirmed) return;
+      }
+      closeTemplateModal();
+    }
+  });
+}
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && templateModalEl && !templateModalEl.classList.contains("hidden")) {
+    if (hasUnsavedTemplateChanges()) {
+      const confirmed = window.confirm("You have unsaved template changes. Close anyway?");
+      if (!confirmed) return;
+    }
+    closeTemplateModal();
+  }
+});
 
 /* -------------------- Templates -------------------- */
 
@@ -274,6 +278,9 @@ if (deleteTemplateBtn) {
   deleteTemplateBtn.addEventListener("click", async () => {
     if (!noteTypeEl || !templateEditorEl || !templateStatusEl) return;
 
+    const confirmed = window.confirm(`Delete saved template for ${noteTypeLabel(noteTypeEl.value)}?`);
+    if (!confirmed) return;
+
     templateStatusEl.textContent = "";
 
     try {
@@ -303,18 +310,23 @@ if (noteTypeEl) {
   noteTypeEl.addEventListener("change", async () => {
     const nextType = noteTypeEl.value;
 
-    if (hasUnsavedTemplateChanges()) {
+    updateNoteTypeLabels();
+
+    if (templateModalEl && !templateModalEl.classList.contains("hidden") && hasUnsavedTemplateChanges()) {
       const confirmed = window.confirm(
         `You have unsaved template changes for ${noteTypeLabel(currentLoadedNoteType)}. Discard them and switch?`
       );
 
       if (!confirmed) {
         noteTypeEl.value = currentLoadedNoteType;
+        updateNoteTypeLabels();
         return;
       }
     }
 
-    await loadTemplate(nextType);
+    if (templateEditorEl) {
+      await loadTemplate(nextType);
+    }
   });
 }
 
@@ -374,27 +386,6 @@ async function streamGenerateNote(shorthand, noteType) {
 
       if (payload.type === "meta") {
         latestProcedure = payload.case_facts?.procedure || "";
-
-        if (procedureBadgeEl && payload.case_facts?.confidence?.procedure !== undefined) {
-          procedureBadgeEl.textContent =
-            `${payload.procedure_label} (confidence: ${payload.case_facts.confidence.procedure})`;
-        }
-
-        if (assumptionsEl) {
-          assumptionsEl.textContent = formatAssumptions(
-            payload.case_facts?.assumptions,
-            payload.case_facts?.needs_review
-          );
-        }
-
-        if (needsReviewEl) {
-          needsReviewEl.textContent = (payload.case_facts?.needs_review || []).join("\n");
-        }
-
-        buildStructuredPreview(payload.case_facts || {}, payload.procedure_label);
-
-        if (metaBox) metaBox.classList.remove("hidden");
-        if (structuredPreviewBox) structuredPreviewBox.classList.remove("hidden");
       }
 
       if (payload.type === "delta") {
@@ -550,7 +541,10 @@ if (feedbackBtn) {
 
 /* -------------------- Init -------------------- */
 
-window.addEventListener("DOMContentLoaded", () => {
+window.addEventListener("DOMContentLoaded", async () => {
   updateNoteTypeLabels();
-  loadTemplate();
+
+  if (templateEditorEl) {
+    await loadTemplate();
+  }
 });
