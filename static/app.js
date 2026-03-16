@@ -18,6 +18,8 @@ const procedureBadgeEl = document.getElementById("procedureBadge");
 const structuredPreviewBox = document.getElementById("structuredPreviewBox");
 const structuredPreviewEl = document.getElementById("structuredPreview");
 
+const generatingStatusEl = document.getElementById("generatingStatus");
+
 const noteTypeEl = document.getElementById("noteType");
 const templateHeadingEl = document.getElementById("templateHeading");
 const outputLabelEl = document.getElementById("outputLabel");
@@ -328,7 +330,12 @@ if (generateBtn) {
 
     generateBtn.disabled = true;
     generateBtn.textContent = "Generating...";
-    outputEl.value = "Generating...";
+    outputEl.value = "";
+    outputEl.classList.add("output-loading");
+
+    if (generatingStatusEl) {
+      generatingStatusEl.textContent = "Generating note...";
+    }
 
     try {
       const res = await fetch("/generate-note", {
@@ -344,6 +351,7 @@ if (generateBtn) {
 
       if (data.error) {
         outputEl.value = data.error;
+        if (generatingStatusEl) generatingStatusEl.textContent = "";
         return;
       }
 
@@ -370,12 +378,16 @@ if (generateBtn) {
 
       if (metaBox) metaBox.classList.remove("hidden");
       if (structuredPreviewBox) structuredPreviewBox.classList.remove("hidden");
+
+      if (generatingStatusEl) generatingStatusEl.textContent = "";
     } catch (err) {
       outputEl.value = "Error generating note.";
       console.error(err);
+      if (generatingStatusEl) generatingStatusEl.textContent = "";
     } finally {
       generateBtn.disabled = false;
       generateBtn.textContent = "Generate note";
+      outputEl.classList.remove("output-loading");
     }
   });
 }

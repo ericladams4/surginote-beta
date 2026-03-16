@@ -95,16 +95,20 @@
         <div class="app-right-column">
           <div class="app-card app-output-card">
             <div class="output-header">
-              <div class="output-header-copy">
-                <div class="card-label" id="outputLabel">Generated Op Note</div>
-                <p class="card-helper subtle-light">Review and edit before use.</p>
-              </div>
+  <div class="output-header-copy">
+    <div class="card-label" id="outputLabel">Generated Op Note</div>
+    <p class="card-helper subtle-light">Review and edit before use.</p>
+  </div>
 
-              <div class="output-actions">
-                <button id="copyBtn" class="secondary-action">Copy</button>
-             
-              </div>
-            </div>
+  <div class="output-actions">
+    <button id="copyBtn" class="secondary-action">Copy</button>
+    <button id="emailBtn" class="secondary-action">Email draft</button>
+  </div>
+</div>
+
+<div id="generatingStatus" class="generating-status"></div>
+
+<textarea id="output" class="app-output-text" rows="22"></textarea>
 
             <textarea id="output" class="app-output-text" rows="22"></textarea>
           </div>
