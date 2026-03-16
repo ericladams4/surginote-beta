@@ -29,19 +29,24 @@ Priorities:
 
 Preferred style:
 - sound like a real general surgery office note
-- if this appears to be a preoperative visit, emphasize surgical problem, workup, impression, and next-step planning
-- if this appears to be a postoperative clinic visit, emphasize recovery course, symptoms, pathology/imaging discussion, and follow-up
+- if this appears to be a preoperative visit, emphasize surgical problem, supporting workup, impression, and next-step planning
+- if this appears to be a postoperative clinic visit, emphasize interval recovery, symptoms, pathology or imaging discussion, wound status if supported, and follow-up
 - assessment should synthesize rather than simply repeat the history
 - plan should be practical and succinct
 """,
     "consult_note": """
-Generate a concise surgical consult note appropriate for an inpatient or ED consultation.
+Generate a concise but complete surgical consult note appropriate for an inpatient or ED consultation.
 
-Priorities:
-- brief, clinically useful, attending-style documentation
-- emphasize the reason for consultation, the key clinical facts, the surgical impression, and actionable recommendations
-- avoid filler, repetition, and textbook explanations
-- total length should generally remain short unless the source material truly requires more detail
+Consult note sections must appear in this order:
+- Reason for Consult
+- HPI
+- Past Medical History
+- Past Surgical History
+- Family History
+- Social History
+- Review of Systems
+- Objective
+- Assessment and Plan
 
 Formatting requirements:
 - use the section header exactly as: Assessment and Plan:
@@ -51,10 +56,47 @@ Formatting requirements:
 - never number the assessment
 - never number the plan
 
+HPI requirements:
+The HPI must clearly describe the presenting pain/symptoms and should include, when supported or reasonably inferable:
+- location
+- intensity
+- quality
+- duration / onset
+- exacerbating or alleviating factors
+- associated symptoms
+
+If exacerbating or alleviating factors are not mentioned, state that there are no specific exacerbating or alleviating factors.
+
+Example style:
+"The patient reports diffuse, severe, sharp abdominal pain beginning 24 hours ago, associated with non-bloody non-bilious emesis, with no specific exacerbating or alleviating factors."
+
+History section defaults:
+- If Family History is not explicitly mentioned, write: "Non-contributory."
+- If Social History is not explicitly mentioned, write: "Denies alcohol use, tobacco use, drug use."
+
+Review of Systems requirements:
+- Keep ROS lightweight and concise.
+- Default to negative/normal systems unless symptoms are specified.
+- Reflect the presenting complaint when relevant, but do not create unsupported positives.
+
+Objective requirements:
+- Must include a physical exam under the "Objective" section.
+- Include available vitals, exam findings, labs, and imaging if supported.
+- If details are sparse, provide a focused general surgical exam using only supported or neutral phrasing.
+
+Assessment and Plan brevity requirements:
+- The assessment must be brief: usually 2–3 sentences maximum.
+- The plan must be brief: usually 3–6 bullets maximum.
+- Prefer compressed clinical language over long explanatory prose.
+- Do not restate the same facts already given in the HPI or Objective.
+- Do not explain obvious surgical reasoning at length.
+- Do not include unnecessary contingency planning unless strongly supported.
+- Each plan bullet should usually be a short action phrase, not a full paragraph.
+- Similar information density is desired, but with shorter phrasing and less narrative.
+
 Consult style rules:
-- HPI should usually be brief (1–3 short sentences)
-- only include exam, labs, or imaging sections if supported and useful
-- do not force sections that are not supported by the source material
+- emphasize the reason for consultation, the key clinical facts, the surgical impression, and actionable recommendations
+- avoid filler, repetition, and textbook explanations
 - keep the note focused on surgical reasoning and recommendations
 """,
 }
@@ -63,7 +105,7 @@ GLOBAL_RULES = """
 Global rules:
 - Use only facts supported by the source material and structured case facts.
 - Do not invent medications, vital signs, exam findings, imaging results, lab values, PMH, PSH, allergies, or operative details unless reasonably supported by the source material.
-- If specific details are missing, omit them or use neutral phrasing rather than fabricate.
+- If specific details are missing, omit them or use neutral phrasing rather than fabricate, except where explicit default wording is required by the consult note instructions.
 - Resolve shorthand into polished professional language.
 - Preserve medical accuracy and a surgeon's voice.
 - Output only the final note.
@@ -89,9 +131,9 @@ If the current case does not fit a section from the template, omit or adapt that
 
 DYNAMIC_FORMATTER_GUIDANCE = """
 Dynamic formatting rules:
-- Only include sections that are actually supported by the case facts and useful for the note type.
+- Only include sections that are actually supported by the case facts and useful for the note type, except where the consult note requires specific mandatory sections.
 - Do not force rigid templates when the available source material is sparse.
-- If data are limited, write a shorter note with fewer sections.
+- If data are limited, write a shorter note with fewer details, while still honoring required consult sections.
 - If the case supports more detail, expand naturally while staying concise.
 - Prefer realistic clinical formatting over completeness for its own sake.
 - The note should feel like something a practicing surgeon would actually write in workflow.
@@ -144,12 +186,7 @@ Additional clinic note guidance:
 Additional consult note guidance:
 - Write like a real inpatient or emergency general surgery consult.
 - Make it clear what question surgery is being asked to address.
-- Use dynamic formatting: include only sections supported by the case and useful for the consult.
-- If supported, useful consult sections may include:
-  - Reason for Consult
-  - HPI
-  - Pertinent Findings
-  - Assessment and Plan
+- Use the required consult sections even when the source material is sparse.
 - The Assessment and Plan section is the most important part of the note.
 
 Assessment and Plan expectations:
@@ -159,13 +196,25 @@ Assessment and Plan expectations:
   - the most likely diagnosis or leading differential if not yet definitive
   - concise clinical reasoning linking the diagnosis to symptoms, exam, labs, and/or imaging
   - the rationale for operative versus nonoperative management
+- Keep the assessment to 2–3 sentences whenever possible.
+- Avoid phrases like "given clinical stability and the plan already in place by medicine, operative management tomorrow is appropriate" when a shorter equivalent will do.
+- Prefer terse attending-style language.
+
 - After the assessment paragraph, leave one blank line.
 - Then provide the plan as bullet points only.
-- Each bullet should contain one actionable recommendation.
+- Use 3–6 bullets whenever possible.
+- Each bullet should contain one actionable recommendation in compressed form.
+- Avoid long rationale within bullets unless clinically necessary.
 - Never number the plan.
 
-- If the consult is sparse, keep the entire note very short.
-- If the consult is for a condition not clearly requiring surgery, recommendations should still sound useful, grounded, and surgeon-like.
+Examples of preferred bullet style:
+- Proceed with robotic cholecystectomy tomorrow
+- NPO after midnight
+- Pre-op CBC/BMP/LFTs in AM
+- Peri-op antibiotics per protocol
+- Notify surgery for fever, worsening pain, or rising bilirubin
+
+- If the consult is sparse, keep the overall note concise.
 - If the example note has a distinctive consult structure or recommendation style, try to match it when appropriate.
 """
     return ""
@@ -178,8 +227,10 @@ Before writing the note, internally reason through the following:
 1. What is the surgical question or reason for consult?
 2. What is the most likely diagnosis or primary surgical issue?
 3. What supporting facts matter most (symptoms, exam, imaging, labs)?
-4. Does the patient appear to need operative intervention, further workup, or conservative management?
-5. What is the shortest, clearest way to communicate the assessment and recommendations?
+4. What PMH, PSH, family history, social history, ROS, and objective details are explicitly available?
+5. What default consult-history wording is required if family history or social history are not provided?
+6. Does the patient appear to need operative intervention, further workup, or conservative management?
+7. What is the shortest, clearest way to communicate the assessment and recommendations?
 
 Do not output these reasoning steps.
 Only output the final note.
@@ -250,5 +301,6 @@ Final output requirements:
 - Produce a complete final {note_label}
 - Use polished medical prose and realistic section headings
 - Make the note ready for physician review and editing
-- Use only the sections supported by the case and useful for the note type
+- Use only the sections supported by the case and useful for the note type, except where consult-note sections are required
+- For consult notes, prefer brevity and shorthand-style clinical compression over polished explanatory prose
 """
