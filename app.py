@@ -1,5 +1,5 @@
-import json
 import os
+import re
 from functools import wraps
 from pathlib import Path
 
@@ -26,6 +26,8 @@ DATA_DIR.mkdir(exist_ok=True)
 BETA_PASSWORD = os.getenv("BETA_PASSWORD", "")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
 
+ALLOWED_NOTE_TYPES = {"op_note", "clinic_note", "consult_note"}
+
 init_db()
 
 
@@ -38,6 +40,17 @@ def require_beta_auth(f):
     return decorated
 
 
+def require_user_auth(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("beta_authed"):
+            return redirect(url_for("login"))
+        if not session.get("phone_authed"):
+            return redirect(url_for("phone_login"))
+        return f(*args, **kwargs)
+    return decorated
+
+
 def require_admin_auth(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -47,15 +60,74 @@ def require_admin_auth(f):
     return decorated
 
 
+def normalize_phone(phone: str) -> str:
+    phone = (phone or "").strip()
+
+    if phone.startswith("+"):
+        digits = re.sub(r"\D", "", phone)
+        return f"+{digits}" if digits else ""
+
+    digits = re.sub(r"\D", "", phone)
+    if len(digits) == 10:
+        return f"+1{digits}"
+    if len(digits) == 11 and digits.startswith("1"):
+        return f"+{digits}"
+
+    return ""
+
+
+def get_or_create_user(phone: str):
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT id, phone FROM users WHERE phone = ?", (phone,))
+    user = cur.fetchone()
+
+    if not user:
+        cur.execute("INSERT INTO users (phone) VALUES (?)", (phone,))
+        conn.commit()
+        cur.execute("SELECT id, phone FROM users WHERE phone = ?", (phone,))
+        user = cur.fetchone()
+
+    conn.close()
+    return user
+
+
 @app.route("/login", methods=["GET", "POST"])
 def login():
     error = None
     if request.method == "POST":
         if request.form.get("password") == BETA_PASSWORD:
             session["beta_authed"] = True
-            return redirect(url_for("index"))
+            return redirect(url_for("phone_login"))
         error = "Incorrect password"
     return render_template("login.html", error=error, mode="beta")
+
+
+@app.route("/phone-login")
+@require_beta_auth
+def phone_login():
+    if session.get("phone_authed"):
+        return redirect(url_for("index"))
+    return render_template("phone_login.html")
+
+
+@app.route("/auth/phone-login", methods=["POST"])
+@require_beta_auth
+def phone_login_direct():
+    payload = request.get_json(silent=True) or {}
+    phone = normalize_phone(payload.get("phone", ""))
+
+    if not phone:
+        return jsonify({"error": "Enter a valid phone number"}), 400
+
+    user = get_or_create_user(phone)
+
+    session["user_id"] = user["id"]
+    session["phone"] = user["phone"]
+    session["phone_authed"] = True
+
+    return jsonify({"status": "ok", "redirect": url_for("index")})
 
 
 @app.route("/admin-login", methods=["GET", "POST"])
@@ -81,7 +153,7 @@ def landing():
 
 
 @app.route("/app")
-@require_beta_auth
+@require_user_auth
 def index():
     return render_template("index.html", warning=PUBLIC_WARNING)
 
@@ -122,11 +194,103 @@ def request_access():
         return jsonify({"status": "ok"})
 
 
+@app.route("/api/templates/<note_type>", methods=["GET"])
+@require_user_auth
+def get_template(note_type):
+    if note_type not in ALLOWED_NOTE_TYPES:
+        return jsonify({"error": "Invalid note type"}), 400
+
+    user_id = session["user_id"]
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT id, note_type, content, created_at, updated_at
+        FROM templates
+        WHERE user_id = ? AND note_type = ?
+        """,
+        (user_id, note_type)
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    if not row:
+        return jsonify({"template": None})
+
+    return jsonify({
+        "template": {
+            "id": row["id"],
+            "note_type": row["note_type"],
+            "content": row["content"],
+            "created_at": row["created_at"],
+            "updated_at": row["updated_at"],
+        }
+    })
+
+
+@app.route("/api/templates/<note_type>", methods=["POST"])
+@require_user_auth
+def save_template(note_type):
+    if note_type not in ALLOWED_NOTE_TYPES:
+        return jsonify({"error": "Invalid note type"}), 400
+
+    payload = request.get_json(silent=True) or {}
+    content = (payload.get("content") or "").strip()
+
+    if not content:
+        return jsonify({"error": "Template content is required"}), 400
+
+    user_id = session["user_id"]
+
+    conn = get_conn()
+    cur = conn.cursor()
+
+    cur.execute(
+        """
+        INSERT INTO templates (user_id, note_type, content, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(user_id, note_type)
+        DO UPDATE SET content = excluded.content, updated_at = CURRENT_TIMESTAMP
+        """,
+        (user_id, note_type, content)
+    )
+
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "ok"})
+
+
+@app.route("/api/templates/<note_type>", methods=["DELETE"])
+@require_user_auth
+def delete_template(note_type):
+    if note_type not in ALLOWED_NOTE_TYPES:
+        return jsonify({"error": "Invalid note type"}), 400
+
+    user_id = session["user_id"]
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM templates WHERE user_id = ? AND note_type = ?",
+        (user_id, note_type)
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "ok"})
+
+
 @app.route("/generate-note", methods=["POST"])
-@require_beta_auth
+@require_user_auth
 def generate_note():
     payload = request.get_json(silent=True) or {}
     shorthand = payload.get("shorthand", "").strip()
+    note_type = (payload.get("note_type") or "op_note").strip()
+
+    if note_type not in ALLOWED_NOTE_TYPES:
+        return jsonify({"error": "Invalid note type"}), 400
 
     if not shorthand:
         return jsonify({"error": "No shorthand provided"}), 400
@@ -135,7 +299,24 @@ def generate_note():
         return jsonify({"error": "Missing OPENAI_API_KEY environment variable"}), 500
 
     case_facts = build_case_facts(shorthand)
-    prompt = build_prompt(case_facts)
+
+    user_id = session["user_id"]
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT content FROM templates WHERE user_id = ? AND note_type = ?",
+        (user_id, note_type)
+    )
+    row = cur.fetchone()
+    conn.close()
+
+    template_content = row["content"] if row else None
+
+    prompt = build_prompt(
+        case_facts=case_facts,
+        note_type=note_type,
+        template_content=template_content
+    )
 
     try:
         response = client.responses.create(
@@ -161,11 +342,13 @@ def generate_note():
         "note": note_text,
         "case_facts": case_facts,
         "procedure_label": procedure_label,
+        "note_type": note_type,
+        "used_template": bool(template_content),
     })
 
 
 @app.route("/feedback", methods=["POST"])
-@require_beta_auth
+@require_user_auth
 def feedback():
     payload = request.get_json(silent=True) or {}
 
@@ -270,6 +453,7 @@ def sample_library():
         selected_procedure=procedure_filter
     )
 
+
 @app.route("/admin/sample-library/<int:sample_id>/delete", methods=["POST"])
 @require_admin_auth
 def delete_sample(sample_id):
@@ -364,6 +548,7 @@ def edit_sample(sample_id):
         return redirect(url_for("sample_library"))
 
     return render_template("edit_sample.html", sample=row, error=None)
+
 
 @app.route("/admin/save-example", methods=["POST"])
 @require_admin_auth

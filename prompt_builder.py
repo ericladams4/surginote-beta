@@ -1,33 +1,185 @@
 import json
 
+NOTE_TYPE_LABELS = {
+    "op_note": "operative note",
+    "clinic_note": "clinic note",
+    "consult_note": "consult note",
+}
 
-def build_prompt(case_facts: dict) -> str:
+NOTE_TYPE_INSTRUCTIONS = {
+    "op_note": """
+Generate a polished operative note appropriate for a general surgeon.
+
+Priorities:
+- concise but complete operative documentation
+- include the core procedural story in a natural operative-note format
+- include procedure performed, indication, key findings, operative technique, specimen, estimated blood loss, drains, and complications if supported
+- maintain a professional operative tone
+- do not include clinic-style assessment/plan formatting unless clearly appropriate
+
+Preferred structure when supported:
+- Preoperative Diagnosis
+- Postoperative Diagnosis
+- Procedure
+- Surgeon / Assistants if supported
+- Anesthesia if supported
+- Indication
+- Findings
+- Description of Procedure
+- Specimen
+- Estimated Blood Loss
+- Drains
+- Complications
+- Disposition
+""",
+    "clinic_note": """
+Generate a polished clinic note appropriate for a general surgeon.
+
+Priorities:
+- outpatient clinical tone
+- emphasize evaluation, interval history, symptoms, decision-making, and treatment planning
+- organize clearly and read like a real follow-up or new-patient surgical clinic note
+- do not force operative sections unless clearly relevant
+- if the patient is being evaluated for surgery, clearly present the problem, relevant workup, impression, and plan
+- if this appears to be a postoperative clinic visit, reflect that naturally
+
+Preferred structure when supported:
+- Chief Complaint or Reason for Visit
+- History of Present Illness
+- Relevant Past Surgical / Medical History if supported
+- Imaging / Labs / Prior Workup if supported
+- Physical Exam if supported
+- Assessment
+- Plan
+
+Writing guidance:
+- make the Assessment and Plan clinically useful and surgeon-like
+- if details are limited, keep the note concise rather than padded
+- if surgical options, risks, follow-up, diet, wound care, or return precautions are supported, integrate them naturally
+""",
+    "consult_note": """
+Generate a polished consult note appropriate for a general surgeon.
+
+Priorities:
+- inpatient, ED, or hospital consult tone
+- clearly explain why surgery was consulted
+- present the relevant history, current symptoms, workup, exam, and surgical assessment
+- focus on recommendations and surgical decision-making
+- do not force operative sections unless clearly relevant
+- make the impression and recommendations read like a real surgical consult
+
+Preferred structure when supported:
+- Reason for Consult
+- History of Present Illness
+- Relevant Medical / Surgical History
+- Physical Exam
+- Labs / Imaging
+- Assessment
+- Recommendations / Plan
+
+Writing guidance:
+- clearly state whether operative intervention is indicated, not indicated, or pending additional evaluation
+- if the situation suggests observation, antibiotics, interval follow-up, additional imaging, resuscitation, or nonoperative management, state that clearly when supported
+- if the shorthand is sparse, keep the consult focused and clinically grounded rather than verbose
+""",
+}
+
+GLOBAL_RULES = """
+Global rules:
+- Use only facts supported by the source material and structured case facts.
+- Do not invent medications, vital signs, exam findings, imaging results, lab values, PMH, PSH, allergies, or operative details unless they are reasonably implied by the provided source material.
+- If specific details are missing, omit them or use neutral phrasing rather than fabricate.
+- Resolve shorthand into polished professional language.
+- Preserve medical accuracy and a surgeon's voice.
+- Output only the final note.
+- Do not include commentary, bullet explanations, or meta-text.
+"""
+
+TEMPLATE_GUIDANCE = """
+The user has provided a preferred template or example note.
+
+Use it as guidance for:
+- structure
+- section headings
+- formatting
+- writing style
+- degree of detail
+
+Aim to make the output resemble the template when appropriate for the current case.
+
+Do not copy irrelevant, stale, or patient-specific content from the template.
+Do not carry forward details that are not supported by the current source material.
+If the current case does not fit a section from the template, omit or adapt that section naturally.
+"""
+
+def _build_note_specific_guidance(note_type: str) -> str:
+    if note_type == "op_note":
+        return """
+Additional operative note guidance:
+- Make the Description of Procedure the strongest section.
+- Ensure the procedural sequence is coherent and technically believable based on the supplied facts.
+- If assumptions are present in the case facts, you may incorporate them carefully only when they are standard, low-risk defaults and not contradicted by the source material.
+- If procedure identity is uncertain, keep the wording conservative.
+- If the example note uses a surgeon-specific operative structure, mirror that structure when appropriate to the current case.
+"""
+    if note_type == "clinic_note":
+        return """
+Additional clinic note guidance:
+- Write like a real general surgery office note.
+- If the source suggests preoperative evaluation, explain the surgical problem, relevant workup, and next-step planning.
+- If the source suggests postoperative follow-up, focus on recovery course, symptoms, wound issues, diet, bowel function, pathology or imaging discussion, and follow-up plan if supported.
+- The Assessment should synthesize the clinical situation, not merely restate the history.
+- The Plan should sound practical and specific, but only include items supported by the source material.
+- If the example note has a distinctive clinic flow or plan style, try to match it when appropriate.
+"""
+    if note_type == "consult_note":
+        return """
+Additional consult note guidance:
+- Write like a real inpatient or emergency general surgery consult.
+- Make it clear what question the primary team or ED is asking surgery to answer.
+- The Assessment should state the likely surgical problem or differential when supported.
+- The Plan should clearly communicate recommendation(s): operative vs nonoperative management, further workup, monitoring, antibiotics, diet status, admission/disposition, follow-up, or reassessment as appropriate.
+- If the consult is for a condition not clearly requiring surgery, the recommendations should still sound useful and authoritative.
+- If the example note has a distinctive consult structure or recommendation style, try to match it when appropriate.
+"""
+    return ""
+
+
+def build_prompt(case_facts, note_type="op_note", template_content=None):
+    note_type = note_type if note_type in NOTE_TYPE_LABELS else "op_note"
+    note_label = NOTE_TYPE_LABELS[note_type]
+    note_instructions = NOTE_TYPE_INSTRUCTIONS[note_type]
+    note_specific_guidance = _build_note_specific_guidance(note_type)
+
+    case_json = json.dumps(case_facts, indent=2)
+
+    template_section = ""
+    if template_content:
+        template_section = f"""
+{TEMPLATE_GUIDANCE}
+
+USER TEMPLATE / EXAMPLE NOTE:
+{template_content}
+"""
+
     return f"""
-You are an expert general surgery operative note assistant.
+You are an expert surgical documentation assistant helping draft high-quality notes for a general surgeon.
 
-Generate a concise but complete operative note suitable for copy/paste into the EMR.
+Your task is to generate a polished {note_label}.
 
-Rules:
-- Use the structured facts as the source of truth.
-- Use assumptions only for routine details.
-- Do not invent unusual findings, complications, drains, pathology details, or deviations unless explicitly stated.
-- For robotic cholecystectomy, include docking/console language naturally.
-- For laparoscopic cholecystectomy, use conventional laparoscopic language.
-- For hernia cases, include mesh language only if supported by the input facts or routine assumptions.
-- Keep the note realistic, efficient, and consistent with bread-and-butter general surgery documentation.
-- If something is unclear, stay generic rather than hallucinating specifics.
+{note_instructions}
 
-Structured case facts:
-{json.dumps(case_facts, indent=2)}
+{note_specific_guidance}
 
-Output exactly these sections:
-Procedure:
-Indication:
-Findings:
-Description of procedure:
-Estimated blood loss:
-Specimens:
-Drains:
-Complications:
-Disposition:
+{GLOBAL_RULES}
+
+Structured case facts and source material:
+{case_json}
+
+{template_section}
+
+Final output requirements:
+- Produce a complete final {note_label}
+- Use polished medical prose and realistic section headings
+- Make the note ready for physician review and editing
 """

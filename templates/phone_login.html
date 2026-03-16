@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurgiNote Beta</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+
+  <div class="app-overlay">
+    <main class="login-shell-wide">
+
+      <div class="login-topbar">
+        <a href="/" class="login-brand-left">SurgiNote</a>
+      </div>
+
+      <div style="width:100%;max-width:1000px;margin:0 auto;">
+        <section class="login-wide-card" style="display:flex;justify-content:center;">
+          <div style="width:100%;max-width:520px;margin:0 auto;">
+            <p class="login-subtitle" style="margin-bottom:18px;">
+              Enter your mobile number to continue.
+            </p>
+
+            <div class="login-form">
+              <input
+                type="tel"
+                id="phoneInput"
+                class="login-input"
+                placeholder="Phone number"
+                autocomplete="tel"
+              />
+
+              <button id="continueBtn" type="button" class="primary-action login-button">
+                Continue
+              </button>
+            </div>
+
+            <div class="login-status-row centered" style="text-align:center;">
+              <div id="authMessage" class="feedback-status login-status-placeholder">&nbsp;</div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+    </main>
+  </div>
+
+  <script>
+    const phoneInput = document.getElementById("phoneInput");
+    const continueBtn = document.getElementById("continueBtn");
+    const authMessage = document.getElementById("authMessage");
+
+    async function continueWithPhone() {
+      authMessage.textContent = "";
+      continueBtn.disabled = true;
+      continueBtn.textContent = "Continuing...";
+
+      try {
+        const res = await fetch("/auth/phone-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ phone: phoneInput.value })
+        });
+
+        const data = await res.json();
+
+        if (data.redirect) {
+          window.location.href = data.redirect;
+        } else {
+          authMessage.textContent = data.error || "Unable to continue.";
+        }
+      } catch (err) {
+        authMessage.textContent = "Unable to continue.";
+      } finally {
+        continueBtn.disabled = false;
+        continueBtn.textContent = "Continue";
+      }
+    }
+
+    continueBtn.addEventListener("click", continueWithPhone);
+
+    phoneInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        continueWithPhone();
+      }
+    });
+
+    phoneInput.focus();
+  </script>
+</body>
+</html>

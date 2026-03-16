@@ -18,7 +18,17 @@ const procedureBadgeEl = document.getElementById("procedureBadge");
 const structuredPreviewBox = document.getElementById("structuredPreviewBox");
 const structuredPreviewEl = document.getElementById("structuredPreview");
 
+const noteTypeEl = document.getElementById("noteType");
+const templateHeadingEl = document.getElementById("templateHeading");
+const outputLabelEl = document.getElementById("outputLabel");
+const templateEditorEl = document.getElementById("templateEditor");
+const saveTemplateBtn = document.getElementById("saveTemplateBtn");
+const deleteTemplateBtn = document.getElementById("deleteTemplateBtn");
+const templateStatusEl = document.getElementById("templateStatus");
+
 let latestProcedure = "";
+let currentLoadedTemplate = "";
+let currentLoadedNoteType = noteTypeEl ? noteTypeEl.value : "op_note";
 
 /* -------------------- Helpers -------------------- */
 
@@ -60,7 +70,6 @@ function buildStructuredPreview(caseFacts, procedureLabel) {
   const demographics = caseFacts.demographics || {};
   const operative = caseFacts.operative_details || {};
   const assumptions = caseFacts.assumptions || {};
-
   const rows = [];
 
   rows.push(["Procedure", procedureLabel || "Unknown"]);
@@ -69,9 +78,7 @@ function buildStructuredPreview(caseFacts, procedureLabel) {
     const ageSex = [
       demographics.age ? `${demographics.age}` : null,
       demographics.sex ? humanizeKey(demographics.sex) : null
-    ]
-      .filter(Boolean)
-      .join(" / ");
+    ].filter(Boolean).join(" / ");
     rows.push(["Patient", ageSex]);
   }
 
@@ -92,16 +99,12 @@ function buildStructuredPreview(caseFacts, procedureLabel) {
     return;
   }
 
-  structuredPreviewEl.innerHTML = rows
-    .map(([label, value]) => {
-      return `
-        <div class="structured-field">
-          <div class="structured-field-label">${label}</div>
-          <div class="structured-field-value">${value}</div>
-        </div>
-      `;
-    })
-    .join("");
+  structuredPreviewEl.innerHTML = rows.map(([label, value]) => `
+    <div class="structured-field">
+      <div class="structured-field-label">${label}</div>
+      <div class="structured-field-value">${value}</div>
+    </div>
+  `).join("");
 }
 
 async function copyTextWithFallback(text) {
@@ -112,18 +115,14 @@ async function copyTextWithFallback(text) {
       await navigator.clipboard.writeText(text);
       return true;
     }
-  } catch (_) {
-    // fall through to legacy copy
-  }
+  } catch (_) {}
 
   try {
     const temp = document.createElement("textarea");
     temp.value = text;
     temp.style.position = "fixed";
     temp.style.left = "-9999px";
-    temp.style.top = "0";
     document.body.appendChild(temp);
-    temp.focus();
     temp.select();
 
     const successful = document.execCommand("copy");
@@ -132,6 +131,188 @@ async function copyTextWithFallback(text) {
   } catch (_) {
     return false;
   }
+}
+
+/* -------------------- Note type / template UX -------------------- */
+
+function noteTypeLabel(noteType) {
+  if (noteType === "op_note") return "Op Note";
+  if (noteType === "clinic_note") return "Clinic Note";
+  if (noteType === "consult_note") return "Consult Note";
+  return "Note";
+}
+
+function templatePlaceholder(noteType) {
+  if (noteType === "op_note") {
+    return "Example: Preoperative Diagnosis, Postoperative Diagnosis, Procedure, Findings, Description of Procedure, EBL, Specimen, Drains, Complications.";
+  }
+  if (noteType === "clinic_note") {
+    return "Example: Chief Complaint, HPI, Relevant Workup, Assessment, Plan.";
+  }
+  if (noteType === "consult_note") {
+    return "Example: Reason for Consult, HPI, Exam, Labs/Imaging, Assessment, Recommendations.";
+  }
+  return "Paste your preferred template here.";
+}
+
+function shorthandPlaceholder(noteType) {
+  if (noteType === "op_note") {
+    return "29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Lap chole 3 ports uncomplicated.";
+  }
+  if (noteType === "clinic_note") {
+    return "52yoF seen for symptomatic cholelithiasis. Intermittent RUQ pain after meals x 4 months. Ultrasound with gallstones. Discussed laparoscopic cholecystectomy, risks/benefits reviewed, patient wishes to proceed.";
+  }
+  if (noteType === "consult_note") {
+    return "67yoM admitted with SBO. Surgery consulted for abdominal pain, distention, emesis. CT with transition point in mid abdomen. Mild tenderness, no peritonitis. Recommend nonoperative management with bowel rest, IVF, serial abdominal exams.";
+  }
+  return "Describe the encounter in shorthand or free text.";
+}
+
+function updateNoteTypeLabels() {
+  if (!noteTypeEl) return;
+
+  const label = noteTypeLabel(noteTypeEl.value);
+
+  if (templateHeadingEl) {
+    templateHeadingEl.textContent = `Template for ${label}`;
+  }
+
+  if (outputLabelEl) {
+    outputLabelEl.textContent = `Generated ${label}`;
+  }
+
+  if (templateEditorEl) {
+    templateEditorEl.placeholder = templatePlaceholder(noteTypeEl.value);
+  }
+
+  if (shorthandEl) {
+    shorthandEl.placeholder = shorthandPlaceholder(noteTypeEl.value);
+  }
+}
+
+function hasUnsavedTemplateChanges() {
+  if (!templateEditorEl) return false;
+  return templateEditorEl.value.trim() !== (currentLoadedTemplate || "").trim();
+}
+
+/* -------------------- Templates -------------------- */
+
+async function loadTemplate(noteTypeOverride = null) {
+  if (!noteTypeEl || !templateEditorEl || !templateStatusEl) return;
+
+  const noteType = noteTypeOverride || noteTypeEl.value;
+
+  if (noteTypeEl.value !== noteType) {
+    noteTypeEl.value = noteType;
+  }
+
+  updateNoteTypeLabels();
+  templateStatusEl.textContent = "";
+
+  try {
+    const res = await fetch(`/api/templates/${noteType}`);
+    const data = await res.json();
+
+    if (!res.ok) {
+      templateStatusEl.textContent = data.error || "Unable to load template.";
+      return;
+    }
+
+    if (data.template && data.template.content) {
+      templateEditorEl.value = data.template.content;
+      currentLoadedTemplate = data.template.content;
+      templateStatusEl.textContent = "Template loaded.";
+    } else {
+      templateEditorEl.value = "";
+      currentLoadedTemplate = "";
+      templateStatusEl.textContent = "No saved template for this note type.";
+    }
+
+    currentLoadedNoteType = noteType;
+  } catch (err) {
+    console.error(err);
+    templateStatusEl.textContent = "Unable to load template.";
+  }
+}
+
+if (saveTemplateBtn) {
+  saveTemplateBtn.addEventListener("click", async () => {
+    if (!noteTypeEl || !templateEditorEl || !templateStatusEl) return;
+
+    templateStatusEl.textContent = "";
+
+    try {
+      const res = await fetch(`/api/templates/${noteTypeEl.value}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: templateEditorEl.value.trim()
+        })
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        templateStatusEl.textContent = data.error || "Unable to save template.";
+        return;
+      }
+
+      currentLoadedTemplate = templateEditorEl.value.trim();
+      currentLoadedNoteType = noteTypeEl.value;
+      templateStatusEl.textContent = "Template saved.";
+    } catch (err) {
+      console.error(err);
+      templateStatusEl.textContent = "Unable to save template.";
+    }
+  });
+}
+
+if (deleteTemplateBtn) {
+  deleteTemplateBtn.addEventListener("click", async () => {
+    if (!noteTypeEl || !templateEditorEl || !templateStatusEl) return;
+
+    templateStatusEl.textContent = "";
+
+    try {
+      const res = await fetch(`/api/templates/${noteTypeEl.value}`, {
+        method: "DELETE"
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        templateStatusEl.textContent = data.error || "Unable to delete template.";
+        return;
+      }
+
+      templateEditorEl.value = "";
+      currentLoadedTemplate = "";
+      currentLoadedNoteType = noteTypeEl.value;
+      templateStatusEl.textContent = "Template deleted.";
+    } catch (err) {
+      console.error(err);
+      templateStatusEl.textContent = "Unable to delete template.";
+    }
+  });
+}
+
+if (noteTypeEl) {
+  noteTypeEl.addEventListener("change", async () => {
+    const nextType = noteTypeEl.value;
+
+    if (hasUnsavedTemplateChanges()) {
+      const confirmed = window.confirm(
+        `You have unsaved template changes for ${noteTypeLabel(currentLoadedNoteType)}. Discard them and switch?`
+      );
+
+      if (!confirmed) {
+        noteTypeEl.value = currentLoadedNoteType;
+        return;
+      }
+    }
+
+    await loadTemplate(nextType);
+  });
 }
 
 /* -------------------- Generate note -------------------- */
@@ -152,8 +333,11 @@ if (generateBtn) {
     try {
       const res = await fetch("/generate-note", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ shorthand })
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shorthand,
+          note_type: noteTypeEl ? noteTypeEl.value : "op_note"
+        })
       });
 
       const data = await res.json();
@@ -196,7 +380,7 @@ if (generateBtn) {
   });
 }
 
-/* -------------------- Copy button -------------------- */
+/* -------------------- Copy -------------------- */
 
 if (copyBtn) {
   copyBtn.addEventListener("click", async () => {
@@ -221,7 +405,7 @@ if (copyBtn) {
   });
 }
 
-/* -------------------- Email button -------------------- */
+/* -------------------- Email -------------------- */
 
 if (emailBtn) {
   emailBtn.addEventListener("click", () => {
@@ -232,21 +416,16 @@ if (emailBtn) {
       return;
     }
 
+    const currentNoteType = noteTypeEl ? noteTypeLabel(noteTypeEl.value) : "Note";
+
     const subject = encodeURIComponent(
       latestProcedure
-        ? `Operative Note Draft - ${humanizeKey(latestProcedure)}`
-        : "Operative Note Draft"
+        ? `${currentNoteType} Draft - ${humanizeKey(latestProcedure)}`
+        : `${currentNoteType} Draft`
     );
 
     const body = encodeURIComponent(text);
-    const mailto = `mailto:?subject=${subject}&body=${body}`;
-
-    try {
-      window.location.href = mailto;
-    } catch (err) {
-      console.error(err);
-      alert("Unable to open email draft. Make sure a mail app is configured on this device.");
-    }
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
   });
 }
 
@@ -269,7 +448,7 @@ if (feedbackBtn) {
     try {
       const res = await fetch("/feedback", {
         method: "POST",
-        headers: {"Content-Type": "application/json"},
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
 
@@ -292,3 +471,10 @@ if (feedbackBtn) {
     }
   });
 }
+
+/* -------------------- Init -------------------- */
+
+window.addEventListener("DOMContentLoaded", () => {
+  updateNoteTypeLabels();
+  loadTemplate();
+});

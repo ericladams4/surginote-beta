@@ -24,19 +24,49 @@
 
         <div class="app-left-column">
           <div class="app-card app-input-card">
-            <div class="card-label">Enter shorthand</div>
-            <p class="card-helper">Describe the case in your normal surgical shorthand.</p>
+            <div class="card-label">Note type</div>
+            <p class="card-helper">Choose the type of note you want to generate.</p>
+
+            <div class="card-action-row">
+              <select id="noteType" class="app-select">
+                <option value="op_note">Op Note</option>
+                <option value="clinic_note">Clinic Note</option>
+                <option value="consult_note">Consult Note</option>
+              </select>
+            </div>
+
+            <div class="card-label" style="margin-top: 18px;">Enter shorthand</div>
+            <p class="card-helper">Describe the encounter in shorthand or free text.</p>
 
             <textarea
               id="shorthand"
               class="app-shorthand"
               rows="7"
-              placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated."
+              placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Lap chole 3 ports uncomplicated."
             ></textarea>
 
             <div class="card-action-row">
               <button id="generateBtn" class="primary-action">Generate note</button>
             </div>
+          </div>
+
+          <div class="app-card">
+            <div class="card-label" id="templateHeading">Template for Op Note</div>
+            <p class="card-helper">Paste or edit your preferred template for this note type.</p>
+
+            <textarea
+              id="templateEditor"
+              class="app-feedback-text"
+              rows="10"
+              placeholder="Paste your preferred template here. SurgiNote will use its structure, headings, and style."
+            ></textarea>
+
+            <div class="card-action-row">
+              <button id="saveTemplateBtn" class="primary-action">Save template</button>
+              <button id="deleteTemplateBtn" class="secondary-action" type="button">Delete template</button>
+            </div>
+
+            <div id="templateStatus" class="feedback-status"></div>
           </div>
 
           <section id="structuredPreviewBox" class="app-card hidden">
@@ -66,8 +96,8 @@
           <div class="app-card app-output-card">
             <div class="output-header">
               <div class="output-header-copy">
-                <div class="card-label">Generated operative note</div>
-                <p class="card-helper subtle-light">Review assumed routine details before use.</p>
+                <div class="card-label" id="outputLabel">Generated Op Note</div>
+                <p class="card-helper subtle-light">Review and edit before use.</p>
               </div>
 
               <div class="output-actions">

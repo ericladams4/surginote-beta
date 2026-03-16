@@ -30,6 +30,7 @@
                   <th>Procedure</th>
                   <th>Rating</th>
                   <th>Comment</th>
+                  <th>Generated note</th>
                   <th>Created</th>
                 </tr>
               </thead>
@@ -40,6 +41,7 @@
                     <td>{{ row["procedure"] }}</td>
                     <td>{{ row["rating"] }}</td>
                     <td>{{ row["comment"] }}</td>
+                    <td class="admin-table-note">{{ row["generated_note"] }}</td>
                     <td>{{ row["created_at"] }}</td>
                   </tr>
                 {% endfor %}
