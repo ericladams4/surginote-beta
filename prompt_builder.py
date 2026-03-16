@@ -57,32 +57,67 @@ Writing guidance:
 - if details are limited, keep the note concise rather than padded
 - if surgical options, risks, follow-up, diet, wound care, or return precautions are supported, integrate them naturally
 """,
-    "consult_note": """
-Generate a polished consult note appropriate for a general surgeon.
+   "consult_note": """
+Generate a concise surgical consult note appropriate for a busy general surgeon.
 
 Priorities:
-- inpatient, ED, or hospital consult tone
-- clearly explain why surgery was consulted
-- present the relevant history, current symptoms, workup, exam, and surgical assessment
-- focus on recommendations and surgical decision-making
-- do not force operative sections unless clearly relevant
-- make the impression and recommendations read like a real surgical consult
+- concise documentation appropriate for inpatient or ED consults
+- avoid unnecessary narrative or repetition
+- short HPI (1–3 sentences maximum)
+- focused exam only if relevant
+- assessment in bullet form
+- plan in clear bullet points
+- total length should generally be under ~150 words unless clinically necessary
 
-Preferred structure when supported:
-- Reason for Consult
-- History of Present Illness
-- Relevant Medical / Surgical History
-- Physical Exam
-- Labs / Imaging
-- Assessment
-- Recommendations / Plan
+Suggested structure:
 
-Writing guidance:
-- clearly state whether operative intervention is indicated, not indicated, or pending additional evaluation
-- if the situation suggests observation, antibiotics, interval follow-up, additional imaging, resuscitation, or nonoperative management, state that clearly when supported
-- if the shorthand is sparse, keep the consult focused and clinically grounded rather than verbose
-""",
-}
+Reason for consult:
+One short sentence.
+
+HPI:
+Brief summary of key clinical facts only.
+
+Pertinent findings:
+Relevant labs, imaging, or exam findings if available.
+
+Assessment:
+Write a focused surgical assessment that reflects clinical reasoning. The assessment should include:
+
+1. Opening statement
+A one-sentence summary identifying the patient, key clinical context, and the primary surgical issue.
+
+Example format:
+"[Age]-year-old [sex] with [relevant background] presenting with [primary surgical problem]."
+
+2. Impression / Diagnosis
+Clearly state the most likely diagnosis and suspected etiology.
+If the diagnosis is not definitive, briefly list the leading differential diagnoses.
+
+3. Clinical reasoning
+Briefly connect the available clinical information to the diagnosis.
+Reference relevant symptoms, exam findings, laboratory results, or imaging that support the impression.
+
+4. Surgical decision-making
+Explain the rationale for operative versus non-operative management.
+Document why surgical intervention is appropriate, or why conservative management is recommended.
+
+Style guidance:
+- Keep the assessment concise (typically 3–5 sentences).
+- Avoid repeating the entire history.
+- Focus on synthesis and decision-making rather than description.
+- Write in the tone of a real surgical consult note.
+
+Plan:
+• imaging  
+• operative vs nonoperative management  
+• consult recommendations  
+• follow-up
+
+Avoid:
+- long narrative paragraphs
+- repeating the same information in multiple sections
+- textbook explanations
+"""
 
 GLOBAL_RULES = """
 Global rules:
