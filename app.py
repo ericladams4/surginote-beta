@@ -149,7 +149,7 @@ def logout():
 
 @app.route("/")
 def landing():
-    return redirect("https://surginote-beta.onrender.com/login")
+    return render_template("landing.html")
 
 
 @app.route("/app")
