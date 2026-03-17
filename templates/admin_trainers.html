@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expert Roster - SurgiNote Admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+      {% include "_admin_header.html" %}
+
+      <section class="trainer-layout">
+        <div class="trainer-main">
+          {% include "_expert_roster_panel.html" %}
+        </div>
+      </section>
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

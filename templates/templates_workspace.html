@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SurgiNote Templates</title>
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+<div class="app-overlay">
+<main class="app-shell">
+
+<header class="app-header">
+  <div class="app-brand">
+    <a href="/app?note_type={{ selected_note_type }}" class="brand-link brand-logo brand-logo-white">SurgiNote <span class="brand-beta">Beta</span></a>
+  </div>
+  <div class="app-header-links">
+    <a href="/app?note_type={{ selected_note_type }}" id="templatesBackToAppLink" class="app-header-link-button">Back to App</a>
+    {% include "_app_user_menu.html" %}
+  </div>
+</header>
+
+<section class="templates-page-grid">
+  <aside class="app-card templates-sidebar">
+    <div class="card-label">Template Workspace</div>
+    <h1 class="templates-page-title">Make output feel like your charting.</h1>
+    <p class="card-helper templates-page-helper">
+      Use a strict template for exact format and must-copy wording, then layer a real de-identified example note for style, tone, and organization.
+    </p>
+
+    <div class="templates-type-toggle" role="tablist" aria-label="Note type">
+      {% for choice in note_type_choices %}
+      <button
+        type="button"
+        class="templates-type-pill{% if choice.value == selected_note_type %} is-active{% endif %}"
+        data-note-type="{{ choice.value }}"
+        role="tab"
+        aria-selected="{{ 'true' if choice.value == selected_note_type else 'false' }}"
+      >
+        {{ choice.label }}
+      </button>
+      {% endfor %}
+    </div>
+
+    <div class="templates-sidebar-row">
+      <div class="card-label">Saved Profiles</div>
+      <button type="button" id="newTemplateProfileBtn" class="templates-inline-button">New profile</button>
+    </div>
+
+    <div id="templateProfileList" class="template-profile-list"></div>
+  </aside>
+
+  <section class="app-card templates-editor-card">
+    <div class="templates-editor-header">
+      <div>
+        <div class="card-label">Profile Editor</div>
+        <p class="card-helper templates-editor-helper">
+          STRICT controls layout and exact reusable wording. Style learns your de-identified voice and defaults to on.
+        </p>
+      </div>
+      <div id="templateWorkspaceStatus" class="feedback-status templates-status"></div>
+    </div>
+
+    <div class="templates-editor-grid">
+      <label class="templates-field">
+        <span class="card-label">Profile Name</span>
+        <input id="templateProfileName" class="app-select templates-text-input" type="text" placeholder="e.g. Appy laparoscopic" />
+      </label>
+
+      <label class="templates-field templates-checkbox-field">
+        <span class="card-label">Default For Note Type</span>
+        <span class="templates-toggle-row">
+          <input id="templateProfileDefault" type="checkbox" />
+          <span class="templates-toggle-copy">Use this automatically when generating this note type.</span>
+        </span>
+      </label>
+    </div>
+
+    <section class="templates-section-card">
+      <div class="templates-section-header">
+        <div>
+          <div class="card-label">STRICT Formatting Template</div>
+          <p class="card-helper">
+            Paste the exact shell from your EMR. This controls section order, formatting, and must-copy language.
+          </p>
+        </div>
+      </div>
+
+      <div class="templates-rule-row">
+        <div class="templates-rule-chip">Use placeholders like <code>{hpi}</code>, <code>{objective}</code>, <code>{plan}</code></div>
+        <div class="templates-rule-chip">Wrap must-copy text in <code>[[EXACT]]...[[/EXACT]]</code></div>
+        <div class="templates-rule-chip">Add placement cues above exact text like <code>(put this at the bottom)</code></div>
+      </div>
+
+      <textarea
+        id="templateStrictText"
+        class="app-feedback-text templates-large-textarea"
+        rows="14"
+        placeholder="Reason for Consult:&#10;{reason_for_consult}&#10;&#10;HPI:&#10;{hpi}&#10;&#10;(put this in Description of Procedure)&#10;[[EXACT]]A blue load Endo GIA stapler was used to divide the appendix base.[[/EXACT]]"
+      ></textarea>
+    </section>
+
+    <section class="templates-section-card">
+      <div class="templates-section-header">
+        <div>
+          <div class="card-label">Style / Tone / Organization</div>
+          <p class="card-helper">
+            Paste a real de-identified note. SurgiNote will imitate how you sound and organize information without copying patient-specific facts.
+          </p>
+        </div>
+        <label class="templates-toggle-row">
+          <input id="templateStyleEnabled" type="checkbox" checked />
+          <span class="templates-toggle-copy">Default on</span>
+        </label>
+      </div>
+
+      <textarea
+        id="templateStyleText"
+        class="app-feedback-text templates-large-textarea templates-style-textarea"
+        rows="12"
+        placeholder="Paste a de-identified example note here."
+      ></textarea>
+    </section>
+
+    <section class="templates-magic-card">
+      <div class="card-label">How SurgiNote Uses This</div>
+      <div class="templates-magic-grid">
+        <div class="templates-magic-item">
+          <strong>STRICT</strong>
+          <span>Preserves format, headings, and any marked verbatim wording.</span>
+        </div>
+        <div class="templates-magic-item">
+          <strong>STYLE</strong>
+          <span>Learns your rhythm, tone, and note organization.</span>
+        </div>
+        <div class="templates-magic-item">
+          <strong>LIVE FACTS</strong>
+          <span>Blends the current shorthand facts into that frame naturally instead of pasting stale text.</span>
+        </div>
+      </div>
+    </section>
+
+    <div class="card-action-row templates-editor-actions">
+      <button id="saveTemplateProfileBtn" class="primary-action">Save profile</button>
+      <button id="deleteTemplateProfileBtn" class="secondary-action">Delete profile</button>
+    </div>
+  </section>
+</section>
+
+</main>
+{% include "_site_footer.html" %}
+</div>
+
+<script>
+window.__TEMPLATE_WORKSPACE__ = {
+  selectedNoteType: {{ selected_note_type|tojson }},
+  initialProfiles: {{ initial_profiles|tojson }}
+};
+</script>
+<script src="/static/templates_workspace.js"></script>
+</body>
+</html>

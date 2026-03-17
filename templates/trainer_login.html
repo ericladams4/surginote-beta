@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trainer Login - SurgiNote</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="login-shell-wide">
+      <div class="login-topbar">
+        <a href="/" class="brand-link">
+          <div class="brand-logo brand-logo-white">
+            SurgiNote <span class="brand-beta">Trainer</span>
+          </div>
+        </a>
+      </div>
+
+      <section class="login-wide-card trainer-auth-card">
+        <div class="login-left-pane">
+          <h1 class="login-title">Trainer Portal</h1>
+          <p class="login-subtitle">Sign in to review assigned cases, translate them into shorthand, and submit corrected gold notes for admin approval.</p>
+
+          <form method="POST" class="login-form">
+            <input type="email" name="email" class="login-input" placeholder="Email address" autocomplete="email" />
+            <input type="password" name="password" class="login-input" placeholder="Password" autocomplete="current-password" />
+            <button type="submit" class="primary-action login-button">Sign in</button>
+          </form>
+
+          <div class="login-status-row">
+            {% if error %}
+              <p class="error login-error">{{ error }}</p>
+            {% else %}
+              <p class="login-status-placeholder">&nbsp;</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="login-divider"></div>
+
+        <div class="login-right-pane">
+          <h1 class="login-title">Need Help?</h1>
+          <p class="login-subtitle">Reset your password if you have already been added as a trainer, or contact the SurgiNote admin team if you still need an account.</p>
+          <a href="/trainer-reset" class="secondary-action request-access-button trainer-auth-link-button">Reset password</a>
+        </div>
+      </section>
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

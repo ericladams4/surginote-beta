@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Complete Profile - SurgiNote</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="login-shell-wide">
+      <div class="login-topbar">
+        <a href="/" class="brand-link">
+          <div class="brand-logo brand-logo-white">
+            SurgiNote <span class="brand-beta">Beta</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="phone-login-wrap">
+        <section class="login-wide-card phone-login-card">
+          <div class="phone-login-inner">
+            <h1 class="login-title">Tell us who you are</h1>
+            <p class="login-subtitle phone-login-subtitle">We’ll attach your name and credential to this phone number so your account and admin tools show the right identity.</p>
+
+            <form method="POST" class="login-form profile-complete-form">
+              <input type="text" name="first_name" class="login-input" placeholder="First name" value="{{ current_user.first_name if current_user else '' }}" required />
+              <input type="text" name="last_name" class="login-input" placeholder="Last name" value="{{ current_user.last_name if current_user else '' }}" required />
+              <select name="credential_title" class="login-input" required>
+                <option value="">Select credential</option>
+                {% for choice in credential_choices %}
+                  <option value="{{ choice }}" {% if current_user and current_user.credential_title == choice %}selected{% endif %}>{{ "Student" if choice == "student" else choice }}</option>
+                {% endfor %}
+              </select>
+              <button type="submit" class="primary-action login-button">Continue to SurgiNote</button>
+            </form>
+
+            <div class="login-status-row centered phone-login-status">
+              {% if error %}
+                <div class="feedback-status">{{ error }}</div>
+              {% else %}
+                <div class="feedback-status login-status-placeholder">&nbsp;</div>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

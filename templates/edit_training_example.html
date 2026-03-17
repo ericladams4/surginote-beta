@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Edit Training Example - SurgiNote Admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+
+  <div class="app-overlay">
+    <main class="app-shell">
+
+      {% include "_admin_header.html" %}
+
+      <section class="app-card admin-main-card">
+        <div class="card-label">Edit training example</div>
+
+        {% if error %}
+          <div class="feedback-status" style="margin-bottom: 14px;">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" class="edit-sample-form">
+          <div class="training-meta-grid">
+            <div>
+              <div class="card-label admin-label-spacing">Specialty</div>
+              <select name="specialty" class="app-select admin-input">
+                {% for specialty in specialty_options %}
+                  <option value="{{ specialty }}" {% if example['specialty'] == specialty %}selected{% endif %}>{{ specialty }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <div class="card-label admin-label-spacing">Note type</div>
+              <select name="note_type" class="app-select admin-input">
+                <option value="consult_note" {% if example['note_type'] == 'consult_note' %}selected{% endif %}>Consult Note</option>
+                <option value="clinic_note" {% if example['note_type'] == 'clinic_note' %}selected{% endif %}>Clinic Note</option>
+                <option value="op_note" {% if example['note_type'] == 'op_note' %}selected{% endif %}>Op Note</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="card-label admin-label-spacing">Training title</div>
+          <input
+            name="title"
+            class="admin-input"
+            placeholder="training title"
+            value="{{ example['title'] }}"
+          />
+
+          <div class="card-label admin-label-spacing">Shorthand input</div>
+          <textarea
+            name="shorthand_input"
+            class="admin-textarea"
+            rows="5"
+          >{{ example["shorthand_input"] }}</textarea>
+
+          <div class="card-label admin-label-spacing">Generated draft</div>
+          <textarea
+            name="generated_draft"
+            class="admin-textarea"
+            rows="10"
+          >{{ example["generated_draft"] }}</textarea>
+
+          <div class="card-label admin-label-spacing">Corrected gold output</div>
+          <textarea
+            name="corrected_output"
+            class="admin-textarea admin-textarea-lg"
+            rows="14"
+          >{{ example["corrected_output"] }}</textarea>
+
+          <div class="training-meta-grid training-meta-grid-bottom">
+            <div>
+              <div class="card-label admin-label-spacing">Status</div>
+              <select name="status" class="app-select admin-input">
+                {% for training_status in training_statuses %}
+                  <option value="{{ training_status }}" {% if example['status'] == training_status %}selected{% endif %}>{{ training_status.replace("_", " ").title() }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div>
+              <div class="card-label admin-label-spacing">Issue tags</div>
+              <input
+                name="issue_tags"
+                class="admin-input"
+                placeholder="comma separated issue tags"
+                value="{{ example['issue_tags'] }}"
+              />
+            </div>
+          </div>
+
+          <div class="card-label admin-label-spacing">Editor notes</div>
+          <textarea
+            name="editor_notes"
+            class="admin-textarea"
+            rows="4"
+          >{{ example["editor_notes"] }}</textarea>
+
+          <div class="edit-sample-actions">
+            <button type="submit" class="primary-action admin-save-button">Save changes</button>
+            <a href="/admin/training-library" class="secondary-action admin-link-button">Cancel</a>
+          </div>
+        </form>
+      </section>
+
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

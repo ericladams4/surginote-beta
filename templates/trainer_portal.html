@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trainer Portal - SurgiNote</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="app-brand">
+          <div class="brand-logo brand-logo-white">
+            SurgiNote <span class="brand-beta">Trainer</span>
+          </div>
+        </div>
+        <div class="app-header-links">
+          <span class="app-header-link-button trainer-name-pill">{{ trainer["name"] or trainer["email"] }}</span>
+          <a href="/trainer-logout" class="app-logout">Log out</a>
+        </div>
+      </header>
+
+      {% if request.args.get("submitted") %}
+        <div class="feedback-status trainer-page-status">Submission sent for admin review.</div>
+      {% endif %}
+
+      <section class="scenario-summary-grid">
+        <article class="app-card scenario-summary-card">
+          <div class="card-label">Assigned cases</div>
+          <div class="scenario-summary-value">{{ assignments|length }}</div>
+          <div class="scenario-summary-detail">Cases sent directly to this trainer.</div>
+        </article>
+        <article class="app-card scenario-summary-card">
+          <div class="card-label">Portal cases</div>
+          <div class="scenario-summary-value">{{ scenarios|length }}</div>
+          <div class="scenario-summary-detail">Available General Surgery cases in the active curriculum.</div>
+        </article>
+        <article class="app-card scenario-summary-card">
+          <div class="card-label">Cadence</div>
+          <div class="scenario-summary-value">{{ trainer["send_interval_days"] or 7 }}d</div>
+          <div class="scenario-summary-detail">Automatic email interval for new trainer cases.</div>
+        </article>
+      </section>
+
+      <section class="review-scenario-layout">
+        <div class="review-scenario-main">
+          <section class="app-card">
+            <div class="card-label">Assigned queue</div>
+            {% if assignments %}
+              <div class="review-scenario-recent-list">
+                {% for assignment in assignments %}
+                  <article class="review-scenario-recent-item">
+                    <div class="review-scenario-recent-top">
+                      <strong>{{ assignment["title"] }}</strong>
+                      <span>{{ assignment["assignment_status"].replace("_", " ").title() }}</span>
+                    </div>
+                    <div class="review-scenario-recent-meta">{{ assignment["module_label"] or "General Surgery" }} · {{ assignment["note_type"].replace("_", " ").title() }}</div>
+                    <a href="/trainer/scenarios/{{ assignment['scenario_id'] }}" class="primary-action trainer-inline-link">Open case</a>
+                  </article>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="structured-empty">No cases have been assigned to this trainer yet.</div>
+            {% endif %}
+          </section>
+        </div>
+
+        <aside class="review-scenario-side">
+          <section class="app-card review-scenario-recent-card">
+            <div class="card-label">Open curriculum cases</div>
+            <div class="review-scenario-recent-list">
+              {% for scenario in scenarios %}
+                <article class="review-scenario-recent-item">
+                  <div class="review-scenario-recent-top">
+                    <strong>{{ scenario["title"] }}</strong>
+                    <span>{{ ((scenario["model_confidence"] or 0) * 100) | round(0) }}%</span>
+                  </div>
+                  <div class="review-scenario-recent-meta">{{ scenario["module_label"] or "General Surgery" }} · {{ scenario["note_type"].replace("_", " ").title() }}</div>
+                  <a href="/trainer/scenarios/{{ scenario['id'] }}" class="secondary-action trainer-inline-link">Review case</a>
+                </article>
+              {% endfor %}
+            </div>
+          </section>
+        </aside>
+      </section>
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

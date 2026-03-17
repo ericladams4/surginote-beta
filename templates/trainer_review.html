@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Trainer Case Review - SurgiNote</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+      <header class="app-header">
+        <div class="app-brand">
+          <div class="brand-logo brand-logo-white">
+            SurgiNote <span class="brand-beta">Trainer</span>
+          </div>
+        </div>
+        <div class="app-header-links">
+          <a href="/trainer" class="app-header-link-button">Portal</a>
+          <a href="/trainer-logout" class="app-logout">Log out</a>
+        </div>
+      </header>
+
+      <section class="app-card review-scenario-hero">
+        <div class="review-scenario-hero-copy">
+          <div class="sample-library-procedure">{{ scenario["module_label"] or scenario["specialty"] }} · {{ scenario["note_type"].replace("_", " ").title() }}</div>
+          <h1 class="review-scenario-title">{{ scenario["title"] }}</h1>
+          <p class="card-helper">Translate the case into realistic shorthand, generate a draft, correct it to the note you would actually sign, then submit it for admin review.</p>
+        </div>
+        <div class="review-scenario-badges">
+          <span class="sample-tag-pill">Level {{ scenario["complexity_level"] }}</span>
+          <span class="sample-tag-pill">{{ ((scenario["model_confidence"] or 0) * 100) | round(0) }}% confidence</span>
+        </div>
+      </section>
+
+      <section class="review-scenario-layout">
+        <div class="review-scenario-main">
+          <section class="app-card review-scenario-context-card">
+            <div class="card-label">Scenario</div>
+            <div class="scenario-brief scenario-brief-detailed">{{ scenario["display_brief"] }}</div>
+            <div class="scenario-learning-block">
+              <div class="sample-panel-label">Documentation focus</div>
+              <div class="scenario-learning-copy">{{ scenario["display_focus"] }}</div>
+            </div>
+          </section>
+
+          <section class="app-card trainer-workbench">
+            {% if error %}
+              <div class="feedback-status" style="margin-bottom: 12px;">{{ error }}</div>
+            {% endif %}
+            <form method="POST">
+              <div class="trainer-shorthand-section">
+                <div class="trainer-section-head">
+                  <div>
+                    <div class="card-label">Your shorthand</div>
+                    <p class="card-helper">Write it the way a surgeon would actually enter it.</p>
+                  </div>
+                </div>
+
+                <textarea id="trainerScenarioShorthand" name="shorthand_input" class="admin-textarea trainer-shorthand-textarea" rows="7" placeholder="Translate the scenario into surgeon shorthand."></textarea>
+
+                <div class="trainer-action-bar">
+                  <div class="trainer-primary-actions">
+                    <button id="trainerGenerateDraftBtn" type="button" class="primary-action">Generate draft</button>
+                    <button id="trainerClearBtn" type="button" class="outline-action">Clear</button>
+                  </div>
+                  <div id="trainerDraftStatus" class="feedback-status trainer-inline-status"></div>
+                </div>
+              </div>
+
+              <div class="trainer-editor-grid">
+                <section class="trainer-pane">
+                  <div class="trainer-section-head">
+                    <div>
+                      <div class="card-label">Model draft</div>
+                      <p class="card-helper">Use this as the starting point, not the answer.</p>
+                    </div>
+                  </div>
+                  <textarea id="trainerGeneratedDraft" name="generated_draft" class="admin-textarea admin-textarea-lg trainer-output-textarea" rows="18" placeholder="Generated draft will appear here."></textarea>
+                </section>
+
+                <section class="trainer-pane trainer-pane-gold">
+                  <div class="trainer-section-head">
+                    <div>
+                      <div class="card-label">Corrected output</div>
+                      <p class="card-helper">Edit until it sounds like a surgeon wrote it.</p>
+                    </div>
+                  </div>
+                  <textarea id="trainerCorrectedOutput" name="corrected_output" class="admin-textarea admin-textarea-lg trainer-output-textarea trainer-output-textarea-gold" rows="18" placeholder="Correct the draft here."></textarea>
+                </section>
+              </div>
+
+              <div class="review-scenario-footer-grid">
+                <div class="review-scenario-feedback-pane">
+                  <div class="card-label admin-label-spacing">Reviewer comments</div>
+                  <textarea name="reviewer_comments" class="admin-textarea trainer-notes-textarea" rows="5" placeholder="Explain what felt off. Example: too wordy, section wrong, assumption unsupported."></textarea>
+                </div>
+                <div class="review-scenario-grade-pane">
+                  <div class="card-label admin-label-spacing">Issue tags</div>
+                  <input name="issue_tags" class="admin-input" placeholder="verbosity, bad assumption, not surgeon-like" />
+                  <button type="submit" class="primary-action trainer-save-button" style="margin-top: 16px;">Submit for admin review</button>
+                </div>
+              </div>
+            </form>
+          </section>
+        </div>
+      </section>
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+
+  <script>
+    const shorthandEl = document.getElementById("trainerScenarioShorthand");
+    const generatedDraftEl = document.getElementById("trainerGeneratedDraft");
+    const correctedOutputEl = document.getElementById("trainerCorrectedOutput");
+    const generateDraftBtn = document.getElementById("trainerGenerateDraftBtn");
+    const clearBtn = document.getElementById("trainerClearBtn");
+    const statusEl = document.getElementById("trainerDraftStatus");
+
+    async function generateDraft() {
+      const shorthand = (shorthandEl.value || "").trim();
+      if (!shorthand) {
+        statusEl.textContent = "Enter shorthand first.";
+        return;
+      }
+
+      generateDraftBtn.disabled = true;
+      statusEl.textContent = "Generating draft...";
+
+      try {
+        const res = await fetch("/trainer/generate-draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shorthand,
+            specialty: {{ scenario["specialty"] | tojson }},
+            note_type: {{ scenario["note_type"] | tojson }}
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          statusEl.textContent = data.error || "Unable to generate draft.";
+          return;
+        }
+
+        generatedDraftEl.value = data.note || "";
+        if (!(correctedOutputEl.value || "").trim()) {
+          correctedOutputEl.value = data.note || "";
+        }
+        statusEl.textContent = "Draft generated.";
+      } catch (_) {
+        statusEl.textContent = "Unable to generate draft.";
+      } finally {
+        generateDraftBtn.disabled = false;
+      }
+    }
+
+    generateDraftBtn.addEventListener("click", generateDraft);
+    clearBtn.addEventListener("click", () => {
+      shorthandEl.value = "";
+      generatedDraftEl.value = "";
+      correctedOutputEl.value = "";
+      statusEl.textContent = "";
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<header class="app-header">
+  <div class="app-brand">
+    <a href="/admin" class="brand-link brand-logo brand-logo-white">
+      SurgiNote <span class="brand-beta">Admin</span>
+    </a>
+  </div>
+  <div class="app-header-links">
+    <a href="/app" class="app-header-link-button app-header-link-button-admin">Back to App</a>
+    <a href="/admin" class="app-header-link-button {% if request.path == '/admin' %}is-active{% endif %}">Dashboard</a>
+    <a href="/admin/trainer" class="app-header-link-button {% if request.path.startswith('/admin/trainer') or request.path.startswith('/admin/scenarios') or request.path.startswith('/admin/trainers') or request.path.startswith('/admin/training-library') or request.path.startswith('/admin/sample-library') %}is-active{% endif %}">Trainer</a>
+    <a href="/admin/settings" class="app-header-link-button {% if request.path.startswith('/admin/settings') or request.path.startswith('/admin/user-access') %}is-active{% endif %}">Admin Settings</a>
+    <a href="/logout" class="app-logout">Log out</a>
+  </div>
+</header>

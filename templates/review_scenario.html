@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Review Scenario - SurgiNote Admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+
+      {% include "_admin_header.html" %}
+
+      <section class="app-card review-scenario-hero">
+        <div class="review-scenario-hero-copy">
+          <div class="sample-library-procedure">{{ scenario["specialty"] }} · {{ scenario["note_type"].replace("_", " ").title() }}</div>
+          <h1 class="review-scenario-title">{{ scenario["title"] }}</h1>
+          <p class="card-helper">Translate the case into surgeon shorthand, generate a draft, cross out what does not belong, then explain what feels off. The system will store both the corrected output and the reviewer lessons.</p>
+        </div>
+        <div class="review-scenario-badges">
+          {% if scenario["module_label"] %}
+            <span class="sample-tag-pill">{{ scenario["module_label"] }}</span>
+          {% endif %}
+          <span class="sample-tag-pill">Level {{ scenario["complexity_level"] }}</span>
+          <span class="sample-tag-pill">Target level {{ scenario["next_target_level"] }}</span>
+          <span class="sample-tag-pill">{{ ((scenario["model_confidence"] or 0) * 100) | round(0) }}% confidence</span>
+        </div>
+      </section>
+
+      <section class="review-scenario-layout">
+        <div class="review-scenario-main">
+          <section class="app-card review-scenario-context-card">
+            <div class="card-label">Scenario</div>
+            <div class="scenario-brief scenario-brief-detailed">{{ scenario["display_brief"] }}</div>
+
+            {% if scenario["display_focus"] %}
+              <div class="scenario-learning-block">
+                <div class="sample-panel-label">Documentation focus</div>
+                <div class="scenario-learning-copy">{{ scenario["display_focus"] }}</div>
+              </div>
+            {% endif %}
+          </section>
+
+          <section class="app-card trainer-workbench">
+            {% if error %}
+              <div class="feedback-status" style="margin-bottom: 12px;">{{ error }}</div>
+            {% endif %}
+            {% if saved %}
+              <div class="feedback-status" style="margin-bottom: 12px;">Scenario review saved.</div>
+            {% endif %}
+
+            <form method="POST">
+              <div class="trainer-control-strip review-scenario-reviewer-strip">
+                <div class="trainer-control trainer-control-compact">
+                  <div class="card-label admin-label-spacing">Reviewer name</div>
+                  <input name="reviewer_name" class="admin-input" placeholder="e.g. E. Adams" />
+                </div>
+
+                <div class="trainer-control trainer-control-compact">
+                  <div class="card-label admin-label-spacing">Reviewer role</div>
+                  <input name="reviewer_role" class="admin-input" placeholder="e.g. General surgeon" />
+                </div>
+
+                <div class="trainer-control trainer-control-wide">
+                  <div class="card-label admin-label-spacing">Issue tags</div>
+                  <input name="issue_tags" class="admin-input" placeholder="verbosity, bad assumption, not surgeon-like" />
+                </div>
+              </div>
+
+              <div class="trainer-shorthand-section">
+                <div class="trainer-section-head">
+                  <div>
+                    <div class="card-label">Your shorthand</div>
+                    <p class="card-helper">Write the case the way a surgeon would actually type it under time pressure.</p>
+                  </div>
+                </div>
+
+                <textarea
+                  id="scenarioShorthand"
+                  name="shorthand_input"
+                  class="admin-textarea trainer-shorthand-textarea"
+                  rows="7"
+                  placeholder="Translate the scenario into realistic shorthand here."
+                ></textarea>
+
+                <div class="trainer-action-bar">
+                  <div class="trainer-primary-actions">
+                    <button id="generateScenarioDraftBtn" type="button" class="primary-action">Generate draft</button>
+                    <button id="clearScenarioReviewBtn" type="button" class="outline-action">Clear</button>
+                  </div>
+                  <div id="scenarioDraftStatus" class="feedback-status trainer-inline-status"></div>
+                </div>
+              </div>
+
+              <div class="trainer-editor-grid">
+                <section class="trainer-pane">
+                  <div class="trainer-section-head">
+                    <div>
+                      <div class="card-label">Model draft</div>
+                      <p class="card-helper">This is what the current system thinks good looks like.</p>
+                    </div>
+                  </div>
+                  <textarea
+                    id="scenarioGeneratedDraft"
+                    name="generated_draft"
+                    class="admin-textarea admin-textarea-lg trainer-output-textarea"
+                    rows="18"
+                    placeholder="Generated draft will appear here."
+                  ></textarea>
+                </section>
+
+                <section class="trainer-pane trainer-pane-gold">
+                  <div class="trainer-section-head">
+                    <div>
+                      <div class="card-label">Corrected gold output</div>
+                      <p class="card-helper">Edit ruthlessly until this is truly training quality.</p>
+                    </div>
+                  </div>
+                  <textarea
+                    id="scenarioCorrectedOutput"
+                    name="corrected_output"
+                    class="admin-textarea admin-textarea-lg trainer-output-textarea trainer-output-textarea-gold"
+                    rows="18"
+                    placeholder="Paste or edit the final gold-standard note here."
+                  ></textarea>
+                </section>
+              </div>
+
+              <div class="review-scenario-footer-grid">
+                <div class="review-scenario-feedback-pane">
+                  <div class="card-label admin-label-spacing">Freehand reviewer comments</div>
+                  <textarea
+                    name="reviewer_comments"
+                    class="admin-textarea trainer-notes-textarea"
+                    rows="5"
+                    placeholder="Cross out what feels wrong, then explain it plainly. Example: too wordy, no surgeon would say this, assumption should live in exam not HPI."
+                  ></textarea>
+                </div>
+
+                <div class="review-scenario-grade-pane">
+                  <div class="training-meta-grid">
+                    <div>
+                      <div class="card-label admin-label-spacing">Quality status</div>
+                      <select name="quality_status" class="app-select admin-input">
+                        {% for training_status in training_statuses %}
+                          <option value="{{ training_status }}" {% if training_status == "approved" %}selected{% endif %}>{{ training_status.replace("_", " ").title() }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+
+                    <div>
+                      <div class="card-label admin-label-spacing">Grade level</div>
+                      <select name="grade_level" class="app-select admin-input">
+                        {% for grade_level in scenario_grade_levels %}
+                          <option value="{{ grade_level }}" {% if grade_level == "level_1_pass" %}selected{% endif %}>{{ grade_level.replace("_", " ").title() }}</option>
+                        {% endfor %}
+                      </select>
+                    </div>
+                  </div>
+
+                  <button type="submit" class="primary-action trainer-save-button">Save review and promote learning</button>
+                </div>
+              </div>
+            </form>
+          </section>
+        </div>
+
+        <aside class="review-scenario-side">
+          <section class="app-card review-scenario-metric-card">
+            <div class="card-label">Scenario metrics</div>
+            <div class="review-scenario-metric-row"><span>Diagnosis</span><strong>{{ scenario["diagnosis"] or "Not specified" }}</strong></div>
+            <div class="review-scenario-metric-row"><span>Procedure focus</span><strong>{{ scenario["procedure_focus"] or "Not specified" }}</strong></div>
+            <div class="review-scenario-metric-row"><span>Reviews</span><strong>{{ scenario["review_count"] or 0 }}</strong></div>
+            <div class="review-scenario-metric-row"><span>Approved</span><strong>{{ scenario["approved_count"] or 0 }}</strong></div>
+            <div class="review-scenario-metric-row"><span>Gold</span><strong>{{ scenario["gold_count"] or 0 }}</strong></div>
+          </section>
+
+          <section class="app-card review-scenario-recent-card">
+            <div class="card-label">Recent reviews</div>
+            {% if recent_reviews and recent_reviews|length > 0 %}
+              <div class="review-scenario-recent-list">
+                {% for review in recent_reviews %}
+                  <article class="review-scenario-recent-item">
+                    <div class="review-scenario-recent-top">
+                      <strong>{{ review["reviewer_name"] or "Reviewer" }}</strong>
+                      <span>{{ review["grade_level"].replace("_", " ").title() }}</span>
+                    </div>
+                    <div class="review-scenario-recent-meta">{{ review["quality_status"].replace("_", " ").title() }} · similarity {{ ((review["edit_similarity"] or 0) * 100) | round(0) }}%</div>
+                    {% if review["interpreted_lessons"] %}
+                      <p class="review-scenario-recent-copy">{{ review["interpreted_lessons"] }}</p>
+                    {% elif review["reviewer_comments"] %}
+                      <p class="review-scenario-recent-copy">{{ review["reviewer_comments"] }}</p>
+                    {% endif %}
+                  </article>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="structured-empty">No reviews saved for this scenario yet.</div>
+            {% endif %}
+          </section>
+        </aside>
+      </section>
+
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+
+  <script>
+    const shorthandEl = document.getElementById("scenarioShorthand");
+    const generatedDraftEl = document.getElementById("scenarioGeneratedDraft");
+    const correctedOutputEl = document.getElementById("scenarioCorrectedOutput");
+    const generateDraftBtn = document.getElementById("generateScenarioDraftBtn");
+    const clearReviewBtn = document.getElementById("clearScenarioReviewBtn");
+    const draftStatusEl = document.getElementById("scenarioDraftStatus");
+
+    async function generateScenarioDraft() {
+      const shorthand = (shorthandEl.value || "").trim();
+      if (!shorthand) {
+        draftStatusEl.textContent = "Enter shorthand first.";
+        return;
+      }
+
+      generateDraftBtn.disabled = true;
+      draftStatusEl.textContent = "Generating draft...";
+
+      try {
+        const res = await fetch("/admin/generate-training-draft", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            shorthand,
+            specialty: {{ scenario["specialty"] | tojson }},
+            note_type: {{ scenario["note_type"] | tojson }}
+          })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          draftStatusEl.textContent = data.error || "Unable to generate draft.";
+          return;
+        }
+
+        generatedDraftEl.value = data.note || "";
+        if (!(correctedOutputEl.value || "").trim()) {
+          correctedOutputEl.value = data.note || "";
+        }
+        draftStatusEl.textContent = "Draft generated.";
+        console.info("SurgiNote scenario review timings", data.timings || {});
+      } catch (err) {
+        console.error(err);
+        draftStatusEl.textContent = "Network or server error.";
+      } finally {
+        generateDraftBtn.disabled = false;
+      }
+    }
+
+    generateDraftBtn.addEventListener("click", generateScenarioDraft);
+    clearReviewBtn.addEventListener("click", () => {
+      shorthandEl.value = "";
+      generatedDraftEl.value = "";
+      correctedOutputEl.value = "";
+      draftStatusEl.textContent = "";
+    });
+  </script>
+</body>
+</html>

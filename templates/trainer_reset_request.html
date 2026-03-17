@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reset Trainer Password - SurgiNote</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="login-shell-wide">
+      <div class="login-topbar">
+        <a href="/trainer-login" class="brand-link">
+          <div class="brand-logo brand-logo-white">
+            SurgiNote <span class="brand-beta">Trainer</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="phone-login-wrap">
+        <section class="login-wide-card phone-login-card trainer-reset-card">
+          <div class="phone-login-inner">
+            <h1 class="login-title trainer-auth-title">Reset password</h1>
+            <p class="login-subtitle phone-login-subtitle">Enter the email on your trainer account and we’ll send a reset link.</p>
+
+            <form method="POST" class="login-form">
+              <input type="email" name="email" class="login-input" placeholder="Trainer email" autocomplete="email" />
+              <button type="submit" class="primary-action login-button">Send reset link</button>
+            </form>
+
+            <div class="login-status-row centered phone-login-status">
+              {% if status %}
+                <div class="feedback-status">{{ status }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

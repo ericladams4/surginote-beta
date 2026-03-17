@@ -1,3 +1,4 @@
+const appState = window.__APP_STATE__ || {};
 const shorthandEl = document.getElementById("shorthand");
 const outputEl = document.getElementById("output");
 const outputWrapEl = document.getElementById("outputWrap");
@@ -7,11 +8,6 @@ const generateBtn = document.getElementById("generateBtn");
 const demoBtn = document.getElementById("demoBtn");
 const copyBtn = document.getElementById("copyBtn");
 const emailBtn = document.getElementById("emailBtn");
-
-const ratingEl = document.getElementById("rating");
-const commentEl = document.getElementById("comment");
-const feedbackBtn = document.getElementById("feedbackBtn");
-const feedbackStatus = document.getElementById("feedbackStatus");
 
 const generatingStatusEl = document.getElementById("generatingStatus");
 const generatingStatusTextEl = document.getElementById("generatingStatusText");
@@ -23,6 +19,18 @@ const noteTypeTriggerLabelEl = document.getElementById("noteTypeLabelText");
 const noteTypeMenuEl = document.getElementById("noteTypeMenu");
 const noteTypeOptionEls = Array.from(document.querySelectorAll(".note-type-option"));
 const outputLabelEl = document.getElementById("outputLabel");
+const templatesNavLinkEl = document.getElementById("templatesNavLink");
+const inputTemplateRuntimeEl = document.getElementById("inputTemplateRuntime");
+const inputTemplateRuntimeLabelEl = document.getElementById("inputTemplateRuntimeLabel");
+const inputTemplateRuntimePillsEl = document.getElementById("inputTemplateRuntimePills");
+const outputTemplateRuntimeEl = document.getElementById("outputTemplateRuntime");
+const outputTemplateRuntimeLabelEl = document.getElementById("outputTemplateRuntimeLabel");
+const outputTemplateRuntimePillsEl = document.getElementById("outputTemplateRuntimePills");
+const ratingModalEl = document.getElementById("ratingModal");
+const ratingModalBackdropEl = document.getElementById("ratingModalBackdrop");
+const ratingOptionGridEl = document.getElementById("ratingOptionGrid");
+const ratingModalSkipEl = document.getElementById("ratingModalSkip");
+const ratingModalStatusEl = document.getElementById("ratingModalStatus");
 
 /* -------------------- Template settings / modal -------------------- */
 
@@ -36,28 +44,6 @@ const saveTemplateBtn = document.getElementById("saveTemplateBtn");
 const deleteTemplateBtn = document.getElementById("deleteTemplateBtn");
 const templateStatusEl = document.getElementById("templateStatus");
 
-const openFeedbackBtn = document.getElementById("openFeedbackBtn");
-const feedbackModal = document.getElementById("feedbackModal");
-const closeFeedbackModalBtn = document.getElementById("closeFeedbackModalBtn");
-
-function openFeedbackModal() {
-feedbackModal.classList.remove("hidden");
-document.body.classList.add("modal-open");
-}
-
-function closeFeedbackModal() {
-feedbackModal.classList.add("hidden");
-document.body.classList.remove("modal-open");
-}
-
-if (openFeedbackBtn) {
-openFeedbackBtn.addEventListener("click", openFeedbackModal);
-}
-
-if (closeFeedbackModalBtn) {
-closeFeedbackModalBtn.addEventListener("click", closeFeedbackModal);
-}
-
 let latestProcedure = "";
 let latestCaseFacts = null;
 let currentLoadedTemplate = "";
@@ -67,6 +53,14 @@ let activeAssumptionIndex = null;
 let activeAssumptionEl = null;
 let assumptionHideTimeout = null;
 let loadingMessageInterval = null;
+let activeTemplateSummary = appState.activeTemplateSummary || null;
+let lastAppliedTemplateTags = [];
+let latestTeachingSignals = null;
+let demoTypingTimeout = null;
+let demoTypingRunId = 0;
+let lastRatedOutputText = "";
+let ratingModalResolver = null;
+let ratingModalActiveText = "";
 
 const loadingSubtexts = [
   "Anesthesia delay.",
@@ -79,6 +73,8 @@ const loadingSubtexts = [
 const assumptionPopoverEl = outputWrapEl ? document.createElement("div") : null;
 const assumptionLabelEl = document.createElement("div");
 const assumptionInputEl = document.createElement("input");
+const assumptionActionsEl = document.createElement("div");
+const assumptionAcceptBtn = document.createElement("button");
 const assumptionHelpEl = document.createElement("div");
 
 if (assumptionPopoverEl) {
@@ -87,10 +83,16 @@ if (assumptionPopoverEl) {
   assumptionLabelEl.textContent = "Assumption";
   assumptionInputEl.className = "consult-assumption-input";
   assumptionInputEl.type = "text";
+  assumptionActionsEl.className = "consult-assumption-actions";
+  assumptionAcceptBtn.className = "consult-assumption-accept";
+  assumptionAcceptBtn.type = "button";
+  assumptionAcceptBtn.textContent = "Accept assumption";
   assumptionHelpEl.className = "consult-assumption-help";
   assumptionHelpEl.textContent = "Edit this assumption to change the generated consult note.";
   assumptionPopoverEl.appendChild(assumptionLabelEl);
   assumptionPopoverEl.appendChild(assumptionInputEl);
+  assumptionActionsEl.appendChild(assumptionAcceptBtn);
+  assumptionPopoverEl.appendChild(assumptionActionsEl);
   assumptionPopoverEl.appendChild(assumptionHelpEl);
   outputWrapEl.appendChild(assumptionPopoverEl);
 }
@@ -102,6 +104,37 @@ function humanizeKey(key) {
   return String(key)
     .replace(/_/g, " ")
     .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+async function performCopyAction() {
+  const text = getCurrentOutputText();
+  if (!text || !copyBtn) return;
+
+  const original = copyBtn.textContent;
+  copyBtn.disabled = true;
+  const ok = await copyTextWithFallback(text);
+  copyBtn.textContent = ok ? "Copied!" : "Copy failed";
+  if (ok) {
+    await promptForCopyRating(text);
+  }
+  setTimeout(() => {
+    copyBtn.textContent = original;
+    copyBtn.disabled = false;
+  }, 1500);
+}
+
+function performEmailAction() {
+  const text = getCurrentOutputText();
+  if (!text) return;
+
+  const currentNoteType = noteTypeEl ? noteTypeLabel(noteTypeEl.value) : "Note";
+  const subject = encodeURIComponent(
+    latestProcedure
+      ? `${currentNoteType} Draft - ${humanizeKey(latestProcedure)}`
+      : `${currentNoteType} Draft`
+  );
+  const body = encodeURIComponent(text);
+  window.location.href = `mailto:?subject=${subject}&body=${body}`;
 }
 
 async function copyTextWithFallback(text) {
@@ -130,6 +163,112 @@ async function copyTextWithFallback(text) {
   }
 }
 
+async function submitCopyFeedback({ text, rating }) {
+  const response = await fetch("/api/feedback", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      rating: String(rating),
+      note_type: noteTypeEl ? noteTypeEl.value : "consult_note",
+      shorthand: shorthandEl ? shorthandEl.value : "",
+      generated_note: text,
+      procedure: latestProcedure || "",
+      delivery_action: "copy",
+      teaching_signals: latestTeachingSignals || {},
+      exact_used_count: countExactBlocksUsed(activeTemplateSummary, text),
+    }),
+  });
+
+  if (!response.ok) {
+    let message = "Unable to save feedback.";
+    try {
+      const data = await response.json();
+      message = data.error || message;
+    } catch (_) {}
+    throw new Error(message);
+  }
+}
+
+async function promptForCopyRating(text) {
+  if (!text || text === lastRatedOutputText) return;
+  const rating = await openRatingModal(text);
+  if (!rating) return;
+
+  try {
+    setRatingModalStatus("Saving score...");
+    await submitCopyFeedback({ text, rating });
+    lastRatedOutputText = text;
+    closeRatingModal();
+  } catch (error) {
+    console.error(error);
+    setRatingOptionState(false);
+    setRatingModalStatus(error.message || "Unable to save score.");
+  }
+}
+
+function setRatingModalStatus(message = "") {
+  if (ratingModalStatusEl) {
+    ratingModalStatusEl.textContent = message;
+  }
+}
+
+function closeRatingModal() {
+  if (!ratingModalEl) return;
+  ratingModalEl.classList.add("hidden");
+  ratingModalEl.setAttribute("aria-hidden", "true");
+  setRatingModalStatus("");
+  ratingModalActiveText = "";
+  if (ratingOptionGridEl) {
+    ratingOptionGridEl.querySelectorAll(".rating-option").forEach((button) => {
+      button.disabled = false;
+      button.classList.remove("is-selected");
+    });
+  }
+  ratingModalResolver = null;
+}
+
+function setRatingOptionState(disabled) {
+  if (!ratingOptionGridEl) return;
+  ratingOptionGridEl.querySelectorAll(".rating-option").forEach((button) => {
+    button.disabled = disabled;
+  });
+}
+
+function resolveRatingModal(value = null) {
+  if (typeof ratingModalResolver === "function") {
+    const resolver = ratingModalResolver;
+    ratingModalResolver = null;
+    resolver(value);
+  } else {
+    ratingModalResolver = null;
+  }
+}
+
+function openRatingModal(text) {
+  if (!ratingModalEl) return Promise.resolve(window.prompt("Rate this note from 1 to 10.") || null);
+  if (ratingModalResolver) {
+    resolveRatingModal(null);
+  }
+
+  ratingModalActiveText = text;
+  ratingModalEl.classList.remove("hidden");
+  ratingModalEl.setAttribute("aria-hidden", "false");
+  setRatingModalStatus("");
+
+  if (ratingOptionGridEl) {
+    ratingOptionGridEl.querySelectorAll(".rating-option").forEach((button) => {
+      button.disabled = false;
+      button.classList.remove("is-selected");
+    });
+    const first = ratingOptionGridEl.querySelector(".rating-option");
+    if (first) first.focus();
+  }
+
+  return new Promise((resolve) => {
+    ratingModalResolver = resolve;
+  });
+}
+
 function noteTypeLabel(noteType) {
   if (noteType === "op_note") return "Op Note";
   if (noteType === "clinic_note") return "Clinic Note";
@@ -137,8 +276,188 @@ function noteTypeLabel(noteType) {
   return "Note";
 }
 
+function clearDemoTypingAnimation() {
+  if (demoTypingTimeout) {
+    clearTimeout(demoTypingTimeout);
+    demoTypingTimeout = null;
+  }
+  demoTypingRunId += 1;
+}
+
+function scheduleDemoTyping(callback, delay) {
+  return new Promise((resolve) => {
+    demoTypingTimeout = setTimeout(() => {
+      demoTypingTimeout = null;
+      callback();
+      resolve();
+    }, delay);
+  });
+}
+
+async function animateDemoShorthand(sample) {
+  if (!shorthandEl) return true;
+
+  clearDemoTypingAnimation();
+  const runId = demoTypingRunId;
+  const text = String(sample || "");
+
+  if (generateBtn) generateBtn.disabled = true;
+  if (demoBtn) {
+    demoBtn.disabled = true;
+    demoBtn.textContent = "Building demo...";
+  }
+
+  shorthandEl.value = "";
+  shorthandEl.focus();
+  shorthandEl.setSelectionRange(0, 0);
+
+  for (let i = 0; i < text.length; i += 1) {
+    if (runId !== demoTypingRunId) return false;
+
+    shorthandEl.value += text[i];
+    shorthandEl.focus();
+    shorthandEl.setSelectionRange(shorthandEl.value.length, shorthandEl.value.length);
+    shorthandEl.scrollTop = shorthandEl.scrollHeight;
+
+    const nextChar = text[i + 1] || "";
+    let delay = 14;
+    if (/[.,]/.test(text[i])) delay = 42;
+    if (/[\n]/.test(text[i])) delay = 65;
+    if (/\s/.test(nextChar)) delay = Math.max(delay, 22);
+
+    await scheduleDemoTyping(() => {}, delay);
+  }
+
+  if (runId !== demoTypingRunId) return false;
+
+  if (generateBtn) generateBtn.disabled = false;
+  if (demoBtn) {
+    demoBtn.disabled = false;
+    demoBtn.textContent = "Demo";
+  }
+
+  return true;
+}
+
+function countExactBlocksUsed(summary, outputText) {
+  if (!summary || !Array.isArray(summary.exact_blocks) || !summary.exact_blocks.length) return 0;
+  const haystack = String(outputText || "").toLowerCase();
+  let count = 0;
+  for (const block of summary.exact_blocks) {
+    const normalizedBlock = String(block || "").trim().toLowerCase();
+    if (normalizedBlock && haystack.includes(normalizedBlock)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function buildTemplateTagPills(summary, mode = "detected", outputText = "") {
+  if (!summary) return [];
+  const pills = [];
+
+  if (summary.strict_enabled) {
+    pills.push({ label: mode === "applied" ? "STRICT used" : "STRICT", tone: "neutral" });
+  }
+  if (summary.style_enabled) {
+    pills.push({ label: mode === "applied" ? "STYLE used" : "STYLE", tone: "neutral" });
+  }
+  if ((summary.exact_block_count || 0) > 0) {
+    const exactUsedCount = countExactBlocksUsed(summary, outputText);
+    pills.push({
+      label: mode === "applied"
+        ? `Exact phrase used${exactUsedCount || exactUsedCount === 0 ? ` ${exactUsedCount}/${summary.exact_block_count}` : ""}`
+        : `${summary.exact_block_count} exact phrase${summary.exact_block_count === 1 ? "" : "s"}`,
+      tone: exactUsedCount ? "success" : "neutral",
+    });
+  }
+  if ((summary.placeholder_count || 0) > 0) {
+    pills.push({
+      label: mode === "applied"
+        ? `Template fields used ${summary.placeholder_count}`
+        : `${summary.placeholder_count} template field${summary.placeholder_count === 1 ? "" : "s"}`,
+      tone: "neutral",
+    });
+  }
+
+  return pills;
+}
+
+function renderTemplateRuntimeRow(containerEl, labelEl, pillsEl, summary, mode = "detected", outputText = "") {
+  if (!containerEl || !labelEl || !pillsEl) return;
+
+  const pills = buildTemplateTagPills(summary, mode, outputText);
+  if (!summary || !pills.length) {
+    containerEl.classList.add("hidden");
+    labelEl.textContent = "";
+    pillsEl.innerHTML = "";
+    return;
+  }
+
+  labelEl.textContent = mode === "applied"
+    ? `Applied from ${summary.name}`
+    : `Using ${summary.name}`;
+
+  pillsEl.innerHTML = pills.map((pill) => (
+    `<span class="template-runtime-pill${pill.tone === "accent" ? " is-accent" : ""}${pill.tone === "success" ? " is-success" : ""}">${escapeHtml(pill.label)}</span>`
+  )).join("");
+  containerEl.classList.remove("hidden");
+}
+
+function refreshTemplateRuntimeUI(outputText = "") {
+  renderTemplateRuntimeRow(
+    inputTemplateRuntimeEl,
+    inputTemplateRuntimeLabelEl,
+    inputTemplateRuntimePillsEl,
+    activeTemplateSummary,
+    "detected",
+    ""
+  );
+
+  if (outputText && activeTemplateSummary) {
+    renderTemplateRuntimeRow(
+      outputTemplateRuntimeEl,
+      outputTemplateRuntimeLabelEl,
+      outputTemplateRuntimePillsEl,
+      activeTemplateSummary,
+      "applied",
+      outputText
+    );
+    lastAppliedTemplateTags = buildTemplateTagPills(activeTemplateSummary, "applied", outputText);
+  } else if (!outputText) {
+    outputTemplateRuntimeEl?.classList.add("hidden");
+    if (outputTemplateRuntimeLabelEl) outputTemplateRuntimeLabelEl.textContent = "";
+    if (outputTemplateRuntimePillsEl) outputTemplateRuntimePillsEl.innerHTML = "";
+    lastAppliedTemplateTags = [];
+  }
+}
+
+async function loadActiveTemplateSummary(noteType) {
+  try {
+    const res = await fetch(`/api/template-profiles/active/${encodeURIComponent(noteType)}`);
+    const data = await res.json();
+    if (!res.ok) return;
+    activeTemplateSummary = data.profile || null;
+  } catch (err) {
+    console.error(err);
+    activeTemplateSummary = null;
+  } finally {
+    refreshTemplateRuntimeUI(getCurrentOutputText());
+  }
+}
+
 function isConsultSectionHeading(line) {
   return /^(Reason for Consult|HPI|Past Medical History|Medical History|Past Surgical History|Surgical History|Family History|Social History|Review of Systems|ROS|Objective|Assessment and Plan):?$/i.test(
+    String(line || "").trim()
+  );
+}
+
+function normalizeConsultHeading(line) {
+  return String(line || "").trim().replace(/:?\s*$/, ":");
+}
+
+function isInlineExamLabel(line) {
+  return /^(Gen|HEENT|Pulmonary|Cardiovascular|Abdomen|Labs|Imaging):\s*$/i.test(
     String(line || "").trim()
   );
 }
@@ -185,6 +504,23 @@ function startGeneratingStatus() {
   }, 2200);
 }
 
+function showRetryGeneratingStatus() {
+  if (!generatingStatusEl) return;
+
+  if (loadingMessageInterval) {
+    clearInterval(loadingMessageInterval);
+    loadingMessageInterval = null;
+  }
+
+  generatingStatusEl.classList.remove("hidden");
+  if (generatingStatusTextEl) {
+    generatingStatusTextEl.textContent = "Sorry, need to reprep.";
+  }
+  if (generatingStatusSubtextEl) {
+    generatingStatusSubtextEl.textContent = "Trying that again now.";
+  }
+}
+
 function syncNoteTypeDropdown() {
   if (!noteTypeEl) return;
 
@@ -192,6 +528,10 @@ function syncNoteTypeDropdown() {
 
   if (noteTypeTriggerLabelEl) {
     noteTypeTriggerLabelEl.textContent = noteTypeLabel(activeValue);
+  }
+
+  if (templatesNavLinkEl) {
+    templatesNavLinkEl.href = `/templates?note_type=${encodeURIComponent(activeValue)}`;
   }
 
   noteTypeOptionEls.forEach((optionEl) => {
@@ -240,12 +580,42 @@ function escapeHtml(text) {
     .replace(/'/g, "&#39;");
 }
 
+function escapeRegExp(text) {
+  return String(text || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function stripConsultTags(text) {
   return String(text || "").replace(/\[\[(?:\/)?(?:FACT|ASSUMPTION)\]\]/g, "");
 }
 
+function sanitizeConsultTagArtifacts(text) {
+  return String(text || "")
+    .replace(/\[\[(?:\/)?(?:FACT|ASSUMPTION)\]\]/g, "")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/\(\s+/g, "(")
+    .replace(/\s+\)/g, ")")
+    .replace(/([A-Za-z0-9)])\(/g, "$1 (")
+    .replace(/\)\s*([A-Za-z])/g, ") $1")
+    .replace(/[ \t]{2,}/g, " ");
+}
+
+function preprocessConsultTaggedText(text) {
+  const headingPattern = "(Reason for Consult|HPI|Past Medical History|Medical History|Past Surgical History|Surgical History|Family History|Social History|Review of Systems|ROS|Objective|Assessment and Plan)";
+
+  return String(text || "")
+    .replace(/(^|\n)\s*[•*]\s+/g, "$1- ")
+    .replace(
+      new RegExp(`([.!?])\\s+(${headingPattern})(:?)(?=(?:\\s|\\[\\[(?:FACT|ASSUMPTION)\\]\\]))`, "gi"),
+      "$1\n$2$3\n"
+    )
+    .replace(
+      new RegExp(`(^|\\n)\\s*(${headingPattern})(:?)[ \\t]+(?=(?:\\[\\[(?:FACT|ASSUMPTION)\\]\\])?\\S)`, "gi"),
+      "$1$2$3\n"
+    );
+}
+
 function normalizeConsultDisplayText(text) {
-  const normalized = String(text || "")
+  const normalized = sanitizeConsultTagArtifacts(preprocessConsultTaggedText(String(text || "")))
     .replace(/(^|\n)\s*[•*]\s+/g, "$1- ")
     .replace(
       /(^|\n)\s*(Reason for Consult|HPI|Past Medical History|Medical History|Past Surgical History|Surgical History|Family History|Social History|Review of Systems|ROS|Objective|Assessment and Plan)(:?)[ \t]+(?=\S)/gi,
@@ -287,7 +657,28 @@ function normalizeConsultDisplayText(text) {
     result[result.length - 1] = `${result[result.length - 1]} ${trimmed}`.replace(/\s{2,}/g, " ");
   }
 
-  return result.join("\n");
+  const merged = [];
+  for (let index = 0; index < result.length; index += 1) {
+    const current = result[index];
+    const next = result[index + 1];
+
+    if (
+      isInlineExamLabel(current) &&
+      next &&
+      next.trim() &&
+      !isConsultSectionHeading(next) &&
+      !isInlineExamLabel(next) &&
+      !/^- /.test(next.trim())
+    ) {
+      merged.push(`${current.trim()} ${next.trim()}`);
+      index += 1;
+      continue;
+    }
+
+    merged.push(current);
+  }
+
+  return merged.join("\n");
 }
 
 function decorateConsultHtml(html) {
@@ -298,7 +689,7 @@ function decorateConsultHtml(html) {
 }
 
 function parseConsultTaggedOutput(text) {
-  const source = normalizeConsultDisplayText(String(text || ""));
+  const source = preprocessConsultTaggedText(String(text || ""));
   const regex = /\[\[(FACT|ASSUMPTION)\]\]([\s\S]*?)\[\[\/\1\]\]/g;
   const segments = [];
   let lastIndex = 0;
@@ -308,13 +699,14 @@ function parseConsultTaggedOutput(text) {
     if (match.index > lastIndex) {
       segments.push({
         type: "text",
-        value: source.slice(lastIndex, match.index)
+        value: sanitizeConsultTagArtifacts(source.slice(lastIndex, match.index))
       });
     }
 
     segments.push({
       type: match[1] === "FACT" ? "fact" : "assumption",
-      value: match[2]
+      value: sanitizeConsultTagArtifacts(match[2]),
+      accepted: false,
     });
 
     lastIndex = regex.lastIndex;
@@ -323,37 +715,114 @@ function parseConsultTaggedOutput(text) {
   if (lastIndex < source.length) {
     segments.push({
       type: "text",
-      value: source.slice(lastIndex)
+      value: sanitizeConsultTagArtifacts(source.slice(lastIndex))
     });
   }
 
   if (!segments.length) {
-    segments.push({ type: "text", value: source });
+    segments.push({ type: "text", value: sanitizeConsultTagArtifacts(source) });
   }
 
-  return segments;
+  return explodeConsultSegments(segments);
 }
 
-function applyFallbackAssumptionMarkup(html) {
-  if (!html || /\bconsult-assumption\b/.test(html)) {
-    return html;
+function buildFallbackAssumptionPatterns() {
+  const patterns = [];
+  const assumptions = latestCaseFacts?.assumptions || {};
+  const normalizedInput = String(latestCaseFacts?.normalized_input || "");
+  const procedure = latestCaseFacts?.procedure || "";
+  const pmh = latestCaseFacts?.clinical_context?.past_medical_history;
+  const psh = latestCaseFacts?.clinical_context?.past_surgical_history;
+
+  if (assumptions.family_history_default) {
+    patterns.push(new RegExp(escapeRegExp(assumptions.family_history_default), "gi"));
+  }
+  if (assumptions.social_history_default) {
+    patterns.push(new RegExp(escapeRegExp(assumptions.social_history_default), "gi"));
+  }
+  if (assumptions.modifying_factors_default) {
+    patterns.push(new RegExp(escapeRegExp(assumptions.modifying_factors_default), "gi"));
   }
 
-  const patterns = [
-    /\bright lower quadrant\b/gi,
-    /\bright upper quadrant\b/gi,
-    /\bnone reported\.\b/gi,
-    /\bnon-contributory\.\b/gi,
-    /\bdenies alcohol use, tobacco use, drug use\.\b/gi,
-    /\bno prior abdominal surgery reported\.\b/gi,
-    /\bconstitutional negative except as noted in hpi; cardiovascular, respiratory, genitourinary, neurologic negative; positive for abdominal pain and nausea\.\b/gi,
-  ];
-
-  let enhanced = html;
-  for (const pattern of patterns) {
-    enhanced = enhanced.replace(pattern, (match) => `<span class="consult-assumption">${match}</span>`);
+  if ((procedure === "laparoscopic_appendectomy" || /appendic/i.test(JSON.stringify(latestCaseFacts || {}))) && !/\bright lower quadrant\b/i.test(normalizedInput)) {
+    patterns.push(/\bright lower quadrant\b/gi);
   }
-  return enhanced;
+  if (/cholecyst/i.test(JSON.stringify(latestCaseFacts || {})) && !/\bright upper quadrant\b/i.test(normalizedInput)) {
+    patterns.push(/\bright upper quadrant\b/gi);
+  }
+  if (!pmh) {
+    patterns.push(/\bNone reported\.\b/gi);
+  }
+  if (!psh) {
+    patterns.push(/\bNo prior abdominal surgery reported\.\b/gi);
+  }
+
+  return patterns;
+}
+
+function explodeConsultSegments(segments) {
+  const expanded = [];
+  const fallbackPatterns = buildFallbackAssumptionPatterns();
+
+  for (const segment of segments) {
+    const parts = String(segment.value || "").split(/(\n)/);
+
+    for (const part of parts) {
+      if (!part) continue;
+
+      if (part === "\n") {
+        expanded.push({ type: "text", value: "\n" });
+        continue;
+      }
+
+      const trimmed = part.trim();
+      if (isConsultSectionHeading(trimmed)) {
+        expanded.push({ type: "heading", value: normalizeConsultHeading(trimmed) });
+        continue;
+      }
+
+      if (segment.type === "assumption" || !trimmed) {
+        expanded.push({
+          type: segment.type,
+          value: part,
+          accepted: segment.type === "assumption" ? Boolean(segment.accepted) : undefined,
+        });
+        continue;
+      }
+
+      let cursor = 0;
+      let working = part;
+
+      while (cursor < working.length) {
+        let nextMatch = null;
+        let nextPattern = null;
+
+        for (const pattern of fallbackPatterns) {
+          pattern.lastIndex = cursor;
+          const match = pattern.exec(working);
+          if (!match) continue;
+          if (!nextMatch || match.index < nextMatch.index) {
+            nextMatch = match;
+            nextPattern = pattern;
+          }
+        }
+
+        if (!nextMatch) {
+          expanded.push({ type: segment.type, value: working.slice(cursor) });
+          break;
+        }
+
+        if (nextMatch.index > cursor) {
+          expanded.push({ type: segment.type, value: working.slice(cursor, nextMatch.index) });
+        }
+
+        expanded.push({ type: "assumption", value: nextMatch[0], accepted: false });
+        cursor = nextMatch.index + nextMatch[0].length;
+      }
+    }
+  }
+
+  return expanded;
 }
 
 function getConsultPlainText() {
@@ -398,6 +867,62 @@ function findAssumptionSegment(index) {
   return null;
 }
 
+function buildExactPhrasePatterns() {
+  const blocks = Array.isArray(activeTemplateSummary?.exact_blocks)
+    ? activeTemplateSummary.exact_blocks
+    : [];
+
+  return blocks
+    .map((block) => String(block || "").trim())
+    .filter(Boolean)
+    .sort((a, b) => b.length - a.length)
+    .map((block) => new RegExp(escapeRegExp(block), "gi"));
+}
+
+function splitSegmentByExactPhrases(text) {
+  const source = String(text || "");
+  const patterns = buildExactPhrasePatterns();
+
+  if (!source || !patterns.length) {
+    return [{ value: source, isExactPhrase: false }];
+  }
+
+  const pieces = [];
+  let cursor = 0;
+
+  while (cursor < source.length) {
+    let nextMatch = null;
+
+    for (const pattern of patterns) {
+      pattern.lastIndex = cursor;
+      const match = pattern.exec(source);
+      if (!match) continue;
+
+      if (
+        !nextMatch ||
+        match.index < nextMatch.index ||
+        (match.index === nextMatch.index && match[0].length > nextMatch[0].length)
+      ) {
+        nextMatch = match;
+      }
+    }
+
+    if (!nextMatch) {
+      pieces.push({ value: source.slice(cursor), isExactPhrase: false });
+      break;
+    }
+
+    if (nextMatch.index > cursor) {
+      pieces.push({ value: source.slice(cursor, nextMatch.index), isExactPhrase: false });
+    }
+
+    pieces.push({ value: nextMatch[0], isExactPhrase: true });
+    cursor = nextMatch.index + nextMatch[0].length;
+  }
+
+  return pieces.filter((piece) => piece.value);
+}
+
 function showAssumptionPopover(targetEl) {
   if (!assumptionPopoverEl || !outputWrapEl || !consultOutputEl) return;
 
@@ -405,7 +930,7 @@ function showAssumptionPopover(targetEl) {
 
   const assumptionIndex = Number(targetEl.dataset.assumptionIndex);
   const segment = findAssumptionSegment(assumptionIndex);
-  if (!segment) return;
+  if (!segment || segment.accepted) return;
 
   activeAssumptionIndex = assumptionIndex;
   activeAssumptionEl = targetEl;
@@ -428,34 +953,64 @@ function renderConsultSegments() {
 
   let assumptionIndex = -1;
   const html = currentConsultSegments.map((segment) => {
-    const safeValue = escapeHtml(segment.value).replace(/\n/g, "<br>");
+    const pieces = splitSegmentByExactPhrases(segment.value);
+
+    if (segment.type === "heading") {
+      return pieces.map((piece) => {
+        const safeValue = escapeHtml(piece.value).replace(/\n/g, "<br>");
+        const className = piece.isExactPhrase
+          ? "consult-heading consult-exact-phrase"
+          : "consult-heading";
+        return `<span class="${className}">${safeValue}</span>`;
+      }).join("");
+    }
 
     if (segment.type === "fact") {
-      return `<span class="consult-fact">${safeValue}</span>`;
+      return pieces.map((piece) => {
+        const safeValue = escapeHtml(piece.value).replace(/\n/g, "<br>");
+        const className = piece.isExactPhrase
+          ? "consult-fact consult-exact-phrase"
+          : "consult-fact";
+        return `<span class="${className}">${safeValue}</span>`;
+      }).join("");
     }
 
     if (segment.type === "assumption") {
       assumptionIndex += 1;
-      return `<span class="consult-assumption" data-assumption-index="${assumptionIndex}">${safeValue}</span>`;
+      return pieces.map((piece) => {
+        const safeValue = escapeHtml(piece.value).replace(/\n/g, "<br>");
+        const className = [
+          "consult-assumption",
+          piece.isExactPhrase ? "consult-exact-phrase" : "",
+          segment.accepted ? "is-accepted" : "",
+        ].filter(Boolean).join(" ");
+        return `<span class="${className}" data-assumption-index="${assumptionIndex}">${safeValue}</span>`;
+      }).join("");
     }
 
-    return safeValue;
+    return pieces.map((piece) => {
+      const safeValue = escapeHtml(piece.value).replace(/\n/g, "<br>");
+      if (!piece.isExactPhrase) return safeValue;
+      return `<span class="consult-exact-phrase">${safeValue}</span>`;
+    }).join("");
   }).join("");
 
   consultOutputEl.classList.remove("is-generating");
-  consultOutputEl.innerHTML = applyFallbackAssumptionMarkup(decorateConsultHtml(html));
+  consultOutputEl.innerHTML = decorateConsultHtml(html);
   syncStoredOutputText();
+  refreshTemplateRuntimeUI(getConsultPlainText());
 }
 
 function renderConsultStreamingPreview(markupText) {
   if (!consultOutputEl) return;
   consultOutputEl.classList.add("is-generating");
-  consultOutputEl.innerHTML = applyFallbackAssumptionMarkup(decorateConsultHtml(
+  consultOutputEl.innerHTML = decorateConsultHtml(
     escapeHtml(normalizeConsultDisplayText(stripConsultTags(markupText))).replace(/\n/g, "<br>")
-  ));
+  );
   if (outputEl) {
     outputEl.value = normalizeConsultDisplayText(stripConsultTags(markupText));
   }
+  refreshTemplateRuntimeUI(outputEl ? outputEl.value : "");
 }
 
 function clearConsultOutput() {
@@ -468,6 +1023,7 @@ function clearConsultOutput() {
     outputEl.value = "";
   }
   hideAssumptionPopover();
+  refreshTemplateRuntimeUI("");
 }
 
 function setOutputMode(noteType) {
@@ -739,6 +1295,8 @@ if (noteTypeEl) {
     if (templateEditorEl) {
       await loadTemplate(nextType);
     }
+
+    await loadActiveTemplateSummary(nextType);
   });
 }
 
@@ -792,7 +1350,9 @@ async function streamGenerateNote(shorthand, noteType) {
       const data = await res.json();
       errorMessage = data.error || errorMessage;
     } catch (_) {}
-    throw new Error(errorMessage);
+    const error = new Error(errorMessage);
+    error.status = res.status;
+    throw error;
   }
 
   if (!res.body) {
@@ -832,6 +1392,7 @@ async function streamGenerateNote(shorthand, noteType) {
       if (payload.type === "meta") {
         latestProcedure = payload.case_facts?.procedure || "";
         latestCaseFacts = payload.case_facts || null;
+        latestTeachingSignals = payload.teaching_signals || latestTeachingSignals;
         generationTimings = payload.timings || generationTimings;
       }
 
@@ -841,6 +1402,7 @@ async function streamGenerateNote(shorthand, noteType) {
           renderConsultStreamingPreview(streamedText);
         } else {
           outputEl.value = streamedText;
+          refreshTemplateRuntimeUI(streamedText);
           outputEl.scrollTop = outputEl.scrollHeight;
         }
       }
@@ -869,6 +1431,8 @@ async function streamGenerateNote(shorthand, noteType) {
 
 async function runNoteGeneration(shorthand) {
   const trimmed = (shorthand || "").trim();
+  latestTeachingSignals = null;
+  lastRatedOutputText = "";
 
   if (!trimmed) {
     alert("Please enter shorthand first.");
@@ -887,11 +1451,35 @@ async function runNoteGeneration(shorthand) {
 
   outputEl.value = "";
   clearConsultOutput();
+  refreshTemplateRuntimeUI("");
   if (outputWrapEl) outputWrapEl.classList.add("output-loading");
   startGeneratingStatus();
 
   try {
-    await streamGenerateNote(trimmed, noteType);
+    let lastError = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        await streamGenerateNote(trimmed, noteType);
+        lastError = null;
+        break;
+      } catch (err) {
+        lastError = err;
+        const shouldRetry = attempt === 0 && (!err.status || err.status >= 500);
+        if (!shouldRetry) {
+          throw err;
+        }
+
+        outputEl.value = "";
+        clearConsultOutput();
+        currentConsultSegments = [];
+        refreshTemplateRuntimeUI("");
+        showRetryGeneratingStatus();
+        await new Promise((resolve) => window.setTimeout(resolve, 900));
+      }
+    }
+    if (lastError) {
+      throw lastError;
+    }
     stopGeneratingStatus();
   } catch (err) {
     console.error(err);
@@ -901,8 +1489,10 @@ async function runNoteGeneration(shorthand) {
         consultOutputEl.textContent = err.message || "Error generating note.";
         outputEl.value = err.message || "Error generating note.";
         currentConsultSegments = [{ type: "text", value: outputEl.value }];
+        refreshTemplateRuntimeUI(outputEl.value);
       } else {
         outputEl.value = err.message || "Error generating note.";
+        refreshTemplateRuntimeUI(outputEl.value);
       }
     }
     stopGeneratingStatus();
@@ -919,6 +1509,7 @@ async function runNoteGeneration(shorthand) {
 
 if (generateBtn) {
   generateBtn.addEventListener("click", async () => {
+    clearDemoTypingAnimation();
     await runNoteGeneration(shorthandEl.value);
   });
 }
@@ -927,13 +1518,12 @@ if (demoBtn) {
   demoBtn.addEventListener("click", async () => {
     const noteType = noteTypeEl ? noteTypeEl.value : "consult_note";
     const sample = demoShorthand(noteType);
-
-    if (shorthandEl) {
-      shorthandEl.value = sample;
-      shorthandEl.focus();
-      shorthandEl.setSelectionRange(sample.length, sample.length);
+    const didFinishTyping = await animateDemoShorthand(sample);
+    if (!didFinishTyping) return;
+    if (generateBtn) {
+      generateBtn.click();
+      return;
     }
-
     await runNoteGeneration(sample);
   });
 }
@@ -948,18 +1538,7 @@ if (copyBtn) {
       alert("Nothing to copy yet.");
       return;
     }
-
-    const original = copyBtn.textContent;
-    copyBtn.disabled = true;
-
-    const ok = await copyTextWithFallback(text);
-
-    copyBtn.textContent = ok ? "Copied!" : "Copy failed";
-
-    setTimeout(() => {
-      copyBtn.textContent = original;
-      copyBtn.disabled = false;
-    }, 1500);
+    await performCopyAction();
   });
 }
 
@@ -973,60 +1552,7 @@ if (emailBtn) {
       alert("Generate a note first.");
       return;
     }
-
-    const currentNoteType = noteTypeEl ? noteTypeLabel(noteTypeEl.value) : "Note";
-
-    const subject = encodeURIComponent(
-      latestProcedure
-        ? `${currentNoteType} Draft - ${humanizeKey(latestProcedure)}`
-        : `${currentNoteType} Draft`
-    );
-
-    const body = encodeURIComponent(text);
-    window.location.href = `mailto:?subject=${subject}&body=${body}`;
-  });
-}
-
-/* -------------------- Feedback -------------------- */
-
-if (feedbackBtn) {
-  feedbackBtn.addEventListener("click", async () => {
-    const payload = {
-      shorthand: shorthandEl.value.trim(),
-      procedure: latestProcedure,
-      rating: ratingEl.value,
-      comment: commentEl.value.trim(),
-      generated_note: getCurrentOutputText()
-    };
-
-    feedbackBtn.disabled = true;
-    feedbackBtn.textContent = "Submitting...";
-    if (feedbackStatus) feedbackStatus.textContent = "";
-
-    try {
-      const res = await fetch("/feedback", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-
-      const data = await res.json();
-
-      if (data.error) {
-        if (feedbackStatus) feedbackStatus.textContent = data.error;
-        return;
-      }
-
-      if (feedbackStatus) feedbackStatus.textContent = "Feedback submitted.";
-      if (ratingEl) ratingEl.value = "";
-      if (commentEl) commentEl.value = "";
-    } catch (err) {
-      console.error(err);
-      if (feedbackStatus) feedbackStatus.textContent = "Error saving feedback.";
-    } finally {
-      feedbackBtn.disabled = false;
-      feedbackBtn.textContent = "Submit feedback";
-    }
+    performEmailAction();
   });
 }
 
@@ -1059,25 +1585,85 @@ if (consultOutputEl && assumptionPopoverEl) {
     if (!segment) return;
 
     segment.value = assumptionInputEl.value;
+    segment.accepted = false;
     syncStoredOutputText();
 
     if (activeAssumptionEl) {
       activeAssumptionEl.innerHTML = escapeHtml(segment.value).replace(/\n/g, "<br>");
+      activeAssumptionEl.classList.remove("is-accepted");
     }
   });
+
+  assumptionAcceptBtn.addEventListener("click", () => {
+    if (activeAssumptionIndex === null) return;
+    const segment = findAssumptionSegment(activeAssumptionIndex);
+    if (!segment) return;
+    segment.accepted = true;
+    if (activeAssumptionEl) {
+      activeAssumptionEl.classList.add("is-accepted");
+    }
+    hideAssumptionPopover();
+  });
+}
+
+if (ratingOptionGridEl) {
+  ratingOptionGridEl.addEventListener("click", async (event) => {
+    const button = event.target.closest(".rating-option");
+    if (!button) return;
+    const rating = button.dataset.rating;
+    if (!rating) return;
+    ratingOptionGridEl.querySelectorAll(".rating-option").forEach((item) => {
+      item.classList.remove("is-selected");
+    });
+    setRatingOptionState(true);
+    button.classList.add("is-selected");
+    resolveRatingModal(rating);
+  });
+}
+
+if (ratingModalBackdropEl) {
+  ratingModalBackdropEl.addEventListener("click", () => {
+    resolveRatingModal(null);
+    closeRatingModal();
+  });
+}
+
+if (ratingModalSkipEl) {
+  ratingModalSkipEl.addEventListener("click", () => {
+    resolveRatingModal(null);
+    closeRatingModal();
+  });
+}
+
+if (noteTypeEl && appState.initialNoteType && ["consult_note", "clinic_note", "op_note"].includes(appState.initialNoteType)) {
+  noteTypeEl.value = appState.initialNoteType;
 }
 
 updateNoteTypeLabels();
 syncNoteTypeDropdown();
 setOutputMode(noteTypeEl ? noteTypeEl.value : "op_note");
+refreshTemplateRuntimeUI("");
 
 /* -------------------- Init -------------------- */
 
 window.addEventListener("DOMContentLoaded", async () => {
+  if (noteTypeEl && appState.initialNoteType && ["consult_note", "clinic_note", "op_note"].includes(appState.initialNoteType)) {
+    noteTypeEl.value = appState.initialNoteType;
+  }
   updateNoteTypeLabels();
   syncNoteTypeDropdown();
+  refreshTemplateRuntimeUI("");
+
+  await loadActiveTemplateSummary(noteTypeEl ? noteTypeEl.value : "consult_note");
 
   if (templateEditorEl) {
     await loadTemplate();
+  }
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && ratingModalEl && !ratingModalEl.classList.contains("hidden")) {
+    resolveRatingModal(null);
+    closeRatingModal();
   }
 });

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurgiNote Admin Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+      {% include "_admin_header.html" %}
+
+      <section class="app-card admin-analytics-card admin-top-chart-card">
+        <div class="admin-section-head">
+          <div>
+            <div class="card-label">Average scores over time</div>
+            <h1 class="admin-console-title">Quality dashboard</h1>
+            <p class="card-helper admin-dashboard-helper">Track live note quality on a 10-point scale, then move directly into the training surfaces that can fix what users are rating poorly.</p>
+          </div>
+          <div class="admin-analytics-highlight">{{ rating_trend.latest_score_display }}</div>
+        </div>
+        <div class="admin-rating-chart">
+          <svg viewBox="0 0 640 200" class="admin-rating-chart-svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="ratingAreaGradient" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="rgba(66, 147, 224, 0.38)" />
+                <stop offset="100%" stop-color="rgba(66, 147, 224, 0.02)" />
+              </linearGradient>
+            </defs>
+            <line x1="18" y1="18" x2="18" y2="182" class="admin-chart-axis" />
+            <line x1="18" y1="182" x2="622" y2="182" class="admin-chart-axis" />
+            <path d="{{ rating_trend.area_path }}" class="admin-chart-area"></path>
+            <path d="{{ rating_trend.line_path }}" class="admin-chart-line"></path>
+            {% for point in rating_trend.points %}
+              {% set x = 18 + ((604 * loop.index0) / ((rating_trend.points|length - 1) if rating_trend.points|length > 1 else 1)) %}
+              {% set y = 182 - ((point.average_score / 10) * 164) %}
+              <circle cx="{{ x }}" cy="{{ y }}" r="3.5" class="admin-chart-point"></circle>
+            {% endfor %}
+          </svg>
+          <div class="admin-chart-labels">
+            {% for point in rating_trend.points %}
+              {% if loop.first or loop.last or loop.index0 % 3 == 0 %}
+                <span>{{ point.day_label }}</span>
+              {% endif %}
+            {% endfor %}
+          </div>
+        </div>
+      </section>
+
+      <section class="app-card admin-console-header">
+        <div class="admin-dashboard-header-metrics">
+          <div class="admin-dashboard-chip">
+            <span class="admin-dashboard-chip-label">Avg score</span>
+            <span class="admin-dashboard-chip-value">{{ health_summary.average_score_display }}</span>
+          </div>
+          <div class="admin-dashboard-chip">
+            <span class="admin-dashboard-chip-label">Rated notes</span>
+            <span class="admin-dashboard-chip-value">{{ health_summary.note_count }}</span>
+          </div>
+          <div class="admin-dashboard-chip">
+            <span class="admin-dashboard-chip-label">Approved examples</span>
+            <span class="admin-dashboard-chip-value">{{ health_summary.approved_training_examples }}</span>
+          </div>
+          <div class="admin-dashboard-chip">
+            <span class="admin-dashboard-chip-label">Pending trainer reviews</span>
+            <span class="admin-dashboard-chip-value">{{ health_summary.pending_submissions }}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="app-card admin-analytics-card admin-teaching-paths-card">
+        <div class="admin-section-head">
+          <div>
+            <div class="card-label">Teaching paths</div>
+            <p class="card-helper">Every system-wide improvement should flow through one of these three paths: rescue weak live notes, expand the expert gold-standard canon, or refresh urgent model-generated learning scenarios.</p>
+          </div>
+        </div>
+        <div class="admin-guide-grid">
+          {% for lane in training_guide %}
+            <section class="admin-guide-item admin-guide-lane">
+              <div class="card-label">{{ lane.eyebrow }}</div>
+              <div class="admin-guide-title">{{ lane.title }}</div>
+              <div class="admin-guide-helper">{{ lane.helper }}</div>
+              <div class="admin-guide-meta">{{ lane.meta }}</div>
+              <div class="admin-guide-link-list">
+                {% for link in lane.links %}
+                  <a href="{{ link.destination_href or link.href }}" class="admin-guide-link-row">
+                    <span class="admin-guide-link-label">{{ link.label }}</span>
+                    <span class="admin-guide-link-meta">{{ link.meta }}</span>
+                  </a>
+                {% endfor %}
+              </div>
+            </section>
+          {% endfor %}
+        </div>
+      </section>
+
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

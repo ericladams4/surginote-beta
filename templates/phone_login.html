@@ -22,22 +22,69 @@
       <div class="phone-login-wrap">
         <section class="login-wide-card phone-login-card">
           <div class="phone-login-inner">
-            <p class="login-subtitle phone-login-subtitle">
-              Enter your mobile number to continue.
-            </p>
+            <div class="phone-entry-hero">
+              <div class="phone-entry-eyebrow">Fastest Way In</div>
+              <h1 class="phone-entry-title">Get your time back.</h1>
+              <p class="login-subtitle phone-login-subtitle phone-entry-subtitle">
+                Enter your number and step into cleaner surgical notes in seconds.
+              </p>
+            </div>
 
-            <div class="login-form">
-              <input
-                type="tel"
-                id="phoneInput"
-                class="login-input"
-                placeholder="Phone number"
-                autocomplete="tel"
-              />
+            <div class="phone-entry-row">
+              <label class="phone-country-select-wrap" for="countryCode">
+                <select id="countryCode" class="phone-country-select" autocomplete="tel-country-code">
+                  <option value="+1" selected>USA +1</option>
+                </select>
+              </label>
 
-              <button id="continueBtn" type="button" class="primary-action login-button">
-                Continue
-              </button>
+              <div class="phone-digit-layout" id="phoneDigitGroup" aria-label="Phone number">
+                <div class="phone-digit-cluster">
+                  {% for index in range(3) %}
+                    <input
+                      type="tel"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      maxlength="1"
+                      class="phone-digit-box"
+                      data-index="{{ index }}"
+                      aria-label="Phone digit {{ index + 1 }}"
+                      autocomplete="off"
+                    />
+                  {% endfor %}
+                </div>
+                <span class="phone-digit-separator" aria-hidden="true">-</span>
+                <div class="phone-digit-cluster">
+                  {% for index in range(3, 6) %}
+                    <input
+                      type="tel"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      maxlength="1"
+                      class="phone-digit-box"
+                      data-index="{{ index }}"
+                      aria-label="Phone digit {{ index + 1 }}"
+                      autocomplete="off"
+                    />
+                  {% endfor %}
+                </div>
+                <span class="phone-digit-separator" aria-hidden="true">-</span>
+                <div class="phone-digit-cluster phone-digit-cluster-wide">
+                  {% for index in range(6, 10) %}
+                    <input
+                      type="tel"
+                      inputmode="numeric"
+                      pattern="[0-9]*"
+                      maxlength="1"
+                      class="phone-digit-box"
+                      data-index="{{ index }}"
+                      aria-label="Phone digit {{ index + 1 }}"
+                      autocomplete="off"
+                    />
+                  {% endfor %}
+                </div>
+              </div>
+
+              <input type="hidden" id="phoneInput" />
             </div>
 
             <div class="login-status-row centered phone-login-status">
@@ -53,13 +100,36 @@
 
   <script>
     const phoneInput = document.getElementById("phoneInput");
-    const continueBtn = document.getElementById("continueBtn");
     const authMessage = document.getElementById("authMessage");
+    const countryCode = document.getElementById("countryCode");
+    const digitInputs = Array.from(document.querySelectorAll(".phone-digit-box"));
+    let isSubmitting = false;
+
+    function currentPhoneValue() {
+      return `${countryCode.value}${digitInputs.map((input) => input.value || "").join("")}`;
+    }
+
+    function visibleDigitCount() {
+      return digitInputs.filter((input) => input.value).length;
+    }
+
+    function syncPhoneValue() {
+      phoneInput.value = currentPhoneValue();
+    }
 
     async function continueWithPhone() {
+      if (isSubmitting) {
+        return;
+      }
+      syncPhoneValue();
+      if (visibleDigitCount() !== 10) {
+        authMessage.textContent = "Enter all 10 digits to continue.";
+        return;
+      }
+
+      isSubmitting = true;
       authMessage.textContent = "";
-      continueBtn.disabled = true;
-      continueBtn.textContent = "Continuing...";
+      authMessage.textContent = "Opening SurgiNote...";
 
       try {
         const res = await fetch("/auth/phone-login", {
@@ -78,21 +148,76 @@
       } catch (err) {
         authMessage.textContent = "Unable to continue.";
       } finally {
-        continueBtn.disabled = false;
-        continueBtn.textContent = "Continue";
+        isSubmitting = false;
       }
     }
 
-    continueBtn.addEventListener("click", continueWithPhone);
+    digitInputs.forEach((input, index) => {
+      input.addEventListener("input", () => {
+        input.value = (input.value || "").replace(/\D/g, "").slice(0, 1);
+        syncPhoneValue();
 
-    phoneInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") {
+        if (input.value && index < digitInputs.length - 1) {
+          digitInputs[index + 1].focus();
+          digitInputs[index + 1].select();
+        }
+
+        if (visibleDigitCount() === 10) {
+          continueWithPhone();
+        }
+      });
+
+      input.addEventListener("keydown", (e) => {
+        if (e.key === "Backspace" && !input.value && index > 0) {
+          digitInputs[index - 1].focus();
+          digitInputs[index - 1].select();
+        }
+        if (e.key === "ArrowLeft" && index > 0) {
+          e.preventDefault();
+          digitInputs[index - 1].focus();
+        }
+        if (e.key === "ArrowRight" && index < digitInputs.length - 1) {
+          e.preventDefault();
+          digitInputs[index + 1].focus();
+        }
+        if (e.key === "Enter") {
+          e.preventDefault();
+          continueWithPhone();
+        }
+      });
+
+      input.addEventListener("paste", (e) => {
+        const pasted = (e.clipboardData || window.clipboardData).getData("text");
+        const digits = (pasted || "").replace(/\D/g, "").slice(0, 10).split("");
+        if (!digits.length) {
+          return;
+        }
+        e.preventDefault();
+        digitInputs.forEach((box, boxIndex) => {
+          box.value = digits[boxIndex] || "";
+        });
+        syncPhoneValue();
+        const nextIndex = Math.min(digits.length, digitInputs.length - 1);
+        digitInputs[nextIndex].focus();
+        if (digits.length === 10) {
+          continueWithPhone();
+        }
+      });
+    });
+
+    countryCode.addEventListener("change", () => {
+      syncPhoneValue();
+    });
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && document.activeElement && document.activeElement.classList.contains("phone-digit-box")) {
         e.preventDefault();
         continueWithPhone();
       }
     });
 
-    phoneInput.focus();
+    syncPhoneValue();
+    digitInputs[0].focus();
   </script>
 </body>
 </html>

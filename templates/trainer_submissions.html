@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Expert Submissions - SurgiNote Admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+      {% include "_admin_header.html" %}
+
+      <section class="app-card">
+        <div class="trainer-section-head">
+          <div>
+            <div class="card-label">Expert submissions</div>
+            <p class="card-helper">Review what SurgiNote Experts have submitted into the training library pipeline.</p>
+          </div>
+        </div>
+
+        {% if submissions %}
+          <div class="review-scenario-recent-list">
+            {% for submission in submissions %}
+              <article class="review-scenario-recent-item">
+                <div class="review-scenario-recent-top">
+                  <strong>{{ submission["scenario_title"] }}</strong>
+                  <span>{{ submission["submission_status"].replace("_", " ").title() }}</span>
+                </div>
+                <div class="review-scenario-recent-meta">{{ submission["expert_display_name"] or (submission["expert_phone"] or submission["expert_email"]) }} · {{ submission["expert_phone"] or submission["expert_email"] }} · {{ submission["module_label"] or "General Surgery" }}</div>
+                <div class="trainer-roster-actions">
+                  <span class="review-scenario-recent-meta">{{ submission["created_at"] }}</span>
+                  {% if submission["training_example_id"] %}
+                    <a href="/admin/training-library/{{ submission['training_example_id'] }}/edit" class="primary-action trainer-inline-link">Open in library</a>
+                  {% endif %}
+                </div>
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="structured-empty">No expert submissions yet.</div>
+        {% endif %}
+      </section>
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

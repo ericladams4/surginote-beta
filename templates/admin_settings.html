@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin Settings - SurgiNote Admin</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+      {% include "_admin_header.html" %}
+
+      <section class="app-card admin-user-access-card">
+        <div class="admin-section-head">
+          <div>
+            <div class="card-label">Admin settings</div>
+            <h1 class="admin-console-title">Access and control</h1>
+            <p class="card-helper admin-dashboard-helper">Use phone-number roles to control who can run the admin workspace and who can act as a SurgiNote Expert. Admins can manage quality, training, and assignments. Experts receive requested gold-standard note or scenario work directly inside the main app.</p>
+          </div>
+        </div>
+
+        <div class="admin-settings-explainer">
+          <div class="admin-settings-explainer-item">
+            <div class="card-label">Admin role</div>
+            <div class="admin-avenue-helper">Admins can open the dashboard, trainer workspace, urgent scenario queue, and settings surfaces.</div>
+          </div>
+          <div class="admin-settings-explainer-item">
+            <div class="card-label">Expert role</div>
+            <div class="admin-avenue-helper">Experts get a blue Expert button in the app header where they can see and submit pending requested notes or scenarios.</div>
+          </div>
+        </div>
+
+        <form method="POST" action="/admin/user-access" class="admin-user-access-form">
+          <div class="admin-user-access-phone">
+            <input
+              type="tel"
+              name="phone"
+              class="admin-input"
+              placeholder="Phone number, e.g. 4125551234"
+              required
+            />
+          </div>
+          <div class="admin-user-access-role-grid">
+            <label class="templates-toggle-row admin-inline-toggle">
+              <input type="checkbox" name="grant_admin" value="1" checked />
+              <span class="templates-toggle-copy">Grant admin access</span>
+            </label>
+            <label class="templates-toggle-row admin-inline-toggle">
+              <input type="checkbox" name="grant_expert" value="1" />
+              <span class="templates-toggle-copy">Grant expert access</span>
+            </label>
+          </div>
+          <div class="admin-user-access-submit">
+            <button type="submit" class="primary-action">Save user roles</button>
+          </div>
+        </form>
+
+        {% if admin_access_status %}
+          <div class="feedback-status is-success admin-inline-status">{{ admin_access_status }}</div>
+        {% endif %}
+
+        <div class="admin-user-access-list">
+          {% for user in role_users %}
+            <div class="admin-user-access-row">
+              <div class="admin-user-access-copy">
+                <div class="admin-avenue-title">{{ user.display_name or (user.phone or user.email or ("User " ~ user.id)) }}</div>
+                <div class="admin-avenue-helper">
+                  {% if user.is_admin %}<span class="template-profile-chip">Admin</span>{% endif %}
+                  {% if user.is_expert %}<span class="template-profile-chip">Expert</span>{% endif %}
+                  {{ user.phone or user.email or "No phone on file" }} · Role updated since {{ user.created_at }}
+                </div>
+              </div>
+              <div class="admin-user-access-actions">
+                {% if not user.is_admin %}
+                <form method="POST" action="/admin/user-access">
+                  <input type="hidden" name="phone" value="{{ user.phone }}" />
+                  <input type="hidden" name="grant_admin" value="1" />
+                  {% if user.is_expert %}<input type="hidden" name="grant_expert" value="1" />{% endif %}
+                  <button type="submit" class="secondary-action">Add admin</button>
+                </form>
+                {% endif %}
+                {% if not user.is_expert %}
+                <form method="POST" action="/admin/user-access">
+                  <input type="hidden" name="phone" value="{{ user.phone }}" />
+                  {% if user.is_admin %}<input type="hidden" name="grant_admin" value="1" />{% endif %}
+                  <input type="hidden" name="grant_expert" value="1" />
+                  <button type="submit" class="secondary-action">Add expert</button>
+                </form>
+                {% endif %}
+                {% if user.is_admin %}
+                <form method="POST" action="/admin/user-access">
+                  <input type="hidden" name="phone" value="{{ user.phone }}" />
+                  <input type="hidden" name="grant_admin" value="0" />
+                  {% if user.is_expert %}<input type="hidden" name="grant_expert" value="1" />{% endif %}
+                  <button type="submit" class="secondary-action">Remove admin</button>
+                </form>
+                {% endif %}
+                {% if user.is_expert %}
+                <form method="POST" action="/admin/user-access">
+                  <input type="hidden" name="phone" value="{{ user.phone }}" />
+                  {% if user.is_admin %}<input type="hidden" name="grant_admin" value="1" />{% endif %}
+                  <input type="hidden" name="grant_expert" value="0" />
+                  <button type="submit" class="secondary-action">Remove expert</button>
+                </form>
+                {% endif %}
+              </div>
+            </div>
+          {% else %}
+            <div class="structured-empty">No phone-linked admin or expert users yet.</div>
+          {% endfor %}
+        </div>
+      </section>
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

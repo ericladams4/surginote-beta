@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Set New Password - SurgiNote</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="login-shell-wide">
+      <div class="login-topbar">
+        <a href="/trainer-login" class="brand-link">
+          <div class="brand-logo brand-logo-white">
+            SurgiNote <span class="brand-beta">Trainer</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="phone-login-wrap">
+        <section class="login-wide-card phone-login-card trainer-reset-card">
+          <div class="phone-login-inner">
+            <h1 class="login-title trainer-auth-title">Choose a new password</h1>
+            {% if valid_token %}
+              <p class="login-subtitle phone-login-subtitle">Set a new password for your trainer account.</p>
+              <form method="POST" class="login-form">
+                <input type="password" name="password" class="login-input" placeholder="New password" autocomplete="new-password" />
+                <input type="password" name="confirm_password" class="login-input" placeholder="Confirm password" autocomplete="new-password" />
+                <button type="submit" class="primary-action login-button">Update password</button>
+              </form>
+            {% else %}
+              <p class="login-subtitle phone-login-subtitle">This reset link is invalid or expired.</p>
+              <a href="/trainer-reset" class="secondary-action request-access-button trainer-auth-link-button">Request a new reset link</a>
+            {% endif %}
+
+            <div class="login-status-row centered phone-login-status">
+              {% if error %}
+                <div class="feedback-status">{{ error }}</div>
+              {% elif status %}
+                <div class="feedback-status">{{ status }}</div>
+              {% endif %}
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>

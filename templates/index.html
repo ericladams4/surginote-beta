@@ -22,15 +22,23 @@ SurgiNote <span class="brand-beta">Beta</span>
 
 <div class="app-header-links">
 
-<button id="openFeedbackBtn" class="app-header-link-button">
-Feedback
-</button>
+{% if is_admin_user %}
+<a href="/admin" class="app-header-link-button app-header-link-button-admin">
+Admin
+</a>
+{% endif %}
 
-<button id="openTemplateSettingsBtn" class="app-header-link-button">
+{% if is_expert_user %}
+<a href="/expert/requests" class="app-header-link-button app-header-link-button-expert">
+Expert{% if pending_expert_request_count %} ({{ pending_expert_request_count }}){% endif %}
+</a>
+{% endif %}
+
+<a href="/templates?note_type={{ initial_note_type }}" id="templatesNavLink" class="app-header-link-button">
 Templates
-</button>
+</a>
 
-<a href="/logout" class="app-logout">Log out</a>
+{% include "_app_user_menu.html" %}
 
 </div>
 </header>
@@ -80,6 +88,10 @@ aria-labelledby="noteTypeLabelText"
 
 <div class="card-label" style="margin-top:18px;">Enter shorthand</div>
 <p class="card-helper">Describe the encounter in shorthand or free text.</p>
+<div id="inputTemplateRuntime" class="template-runtime-row hidden">
+  <span id="inputTemplateRuntimeLabel" class="template-runtime-label"></span>
+  <div id="inputTemplateRuntimePills" class="template-runtime-pills"></div>
+</div>
 
 <textarea
 id="shorthand"
@@ -113,6 +125,10 @@ Generated Consult Note
 <p class="card-helper subtle-light">
 Review and edit before use.
 </p>
+<div id="outputTemplateRuntime" class="template-runtime-row hidden template-runtime-row-output">
+  <span id="outputTemplateRuntimeLabel" class="template-runtime-label"></span>
+  <div id="outputTemplateRuntimePills" class="template-runtime-pills"></div>
+</div>
 </div>
 
 <div class="output-actions">
@@ -142,109 +158,47 @@ Email draft
 
 </section>
 
-<!-- TEMPLATE MODAL -->
-
-<div id="templateModal" class="template-modal-overlay hidden">
-
-<div class="template-modal-card">
-
-<div class="template-modal-header">
-
-<div>
-<div class="card-label" id="templateHeading">
-Template for Op Note
-</div>
-<p class="card-helper">
-Paste or edit your preferred template for this note type.
-</p>
-</div>
-
-<button id="closeTemplateModalBtn" class="template-modal-close">
-×
-</button>
-
-</div>
-
-<textarea
-id="templateEditor"
-class="app-feedback-text template-modal-editor"
-rows="14"
-placeholder="Paste your preferred template here."
-></textarea>
-
-<div class="card-action-row template-modal-actions">
-
-<button id="saveTemplateBtn" class="primary-action">
-Save template
-</button>
-
-<button id="deleteTemplateBtn" class="secondary-action">
-Delete template
-</button>
-
-</div>
-
-<div id="templateStatus" class="feedback-status"></div>
-
-</div>
-</div>
-
-<!-- FEEDBACK MODAL -->
-
-<div id="feedbackModal" class="template-modal-overlay hidden">
-
-<div class="template-modal-card">
-
-<div class="template-modal-header">
-
-<div>
-<div class="card-label">
-Feedback
-</div>
-<p class="card-helper">
-Help improve SurgiNote.
-</p>
-</div>
-
-<button id="closeFeedbackModalBtn" class="template-modal-close">
-×
-</button>
-
-</div>
-
-<select id="rating" class="app-select">
-
-<option value="">Select one</option>
-<option value="usable_as_is">Usable as-is</option>
-<option value="small_edits">Needed small edits</option>
-<option value="major_edits">Needed major edits</option>
-<option value="wrong_or_unsafe">Wrong / unsafe</option>
-
-</select>
-
-<textarea
-id="comment"
-class="app-feedback-text"
-rows="4"
-placeholder="Optional comment"
-></textarea>
-
-<div class="card-action-row">
-
-<button id="feedbackBtn" class="primary-action">
-Submit feedback
-</button>
-
-</div>
-
-<div id="feedbackStatus" class="feedback-status"></div>
-
-</div>
-</div>
 </main>
+
+<div id="ratingModal" class="rating-modal hidden" aria-hidden="true">
+<div id="ratingModalBackdrop" class="rating-modal-backdrop"></div>
+<div class="rating-modal-card" role="dialog" aria-modal="true" aria-labelledby="ratingModalTitle">
+<div class="rating-modal-orbit rating-modal-orbit-one"></div>
+<div class="rating-modal-orbit rating-modal-orbit-two"></div>
+<div class="card-label rating-modal-label">Post-op vibe check</div>
+<h2 id="ratingModalTitle" class="rating-modal-title">How much did this save your evening?</h2>
+<p class="rating-modal-copy">One tap. Give the note a score from brutal to beautiful so SurgiNote learns what actually lands.</p>
+<div class="rating-scale-copy">
+<span>1 = absolutely not</span>
+<span>10 = chef's kiss</span>
+</div>
+<div id="ratingOptionGrid" class="rating-option-grid" role="group" aria-label="Rate this note from 1 to 10">
+<button type="button" class="rating-option rating-option-low" data-rating="1"><span class="rating-option-number">1</span><span class="rating-option-word">Brutal</span></button>
+<button type="button" class="rating-option rating-option-low" data-rating="2"><span class="rating-option-number">2</span><span class="rating-option-word">Rough</span></button>
+<button type="button" class="rating-option rating-option-low" data-rating="3"><span class="rating-option-number">3</span><span class="rating-option-word">Messy</span></button>
+<button type="button" class="rating-option rating-option-mid" data-rating="4"><span class="rating-option-number">4</span><span class="rating-option-word">Eh</span></button>
+<button type="button" class="rating-option rating-option-mid" data-rating="5"><span class="rating-option-number">5</span><span class="rating-option-word">Okay</span></button>
+<button type="button" class="rating-option rating-option-mid" data-rating="6"><span class="rating-option-number">6</span><span class="rating-option-word">Useful</span></button>
+<button type="button" class="rating-option rating-option-high" data-rating="7"><span class="rating-option-number">7</span><span class="rating-option-word">Strong</span></button>
+<button type="button" class="rating-option rating-option-high" data-rating="8"><span class="rating-option-number">8</span><span class="rating-option-word">Clean</span></button>
+<button type="button" class="rating-option rating-option-high" data-rating="9"><span class="rating-option-number">9</span><span class="rating-option-word">Sharp</span></button>
+<button type="button" class="rating-option rating-option-peak" data-rating="10"><span class="rating-option-number">10</span><span class="rating-option-word">Legend</span></button>
+</div>
+<div id="ratingModalStatus" class="rating-modal-status" aria-live="polite"></div>
+<div class="rating-modal-actions">
+<button type="button" id="ratingModalSkip" class="rating-modal-skip">Skip</button>
+</div>
+</div>
+</div>
 {% include "_site_footer.html" %}
 </div>
 
+<script>
+window.__APP_STATE__ = {
+  initialNoteType: {{ initial_note_type|tojson }},
+  activeTemplateSummary: {{ active_template_summary|tojson }}
+};
+</script>
 <script src="/static/app.js"></script>
 
 </body>

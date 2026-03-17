@@ -121,12 +121,13 @@ Review of Systems requirements:
 Objective requirements:
 - Must include a physical exam under the "Objective" section.
 - Include available vitals, exam findings, labs, and imaging if supported.
-- The physical exam should be written in formal exam format with separate lines:
-  - Gen:
-  - HEENT:
-  - Pulmonary:
-  - Cardiovascular:
-  - Abdomen:
+- The physical exam should be written in formal exam format with one organ system per line, with the finding on the same line as the label:
+  - Gen: ...
+  - HEENT: ...
+  - Pulmonary: ...
+  - Cardiovascular: ...
+  - Abdomen: ...
+- Never place the finding on a separate line below the organ system label.
 - If details are sparse, use the following neutral defaults unless contradicted by the source material:
   - Gen: No acute distress, comfortable
   - HEENT: Normocephalic, atraumatic
@@ -199,6 +200,44 @@ Dynamic formatting rules:
 - The note should feel like something a practicing surgeon would actually write in workflow.
 """
 
+STRICT_TEMPLATE_GUIDANCE = """
+The user has provided a strict formatting template copied from their EMR or workflow.
+
+Treat the strict template as authoritative for:
+- section order
+- section labels
+- hard formatting expectations
+- reusable wording blocks that are meant to recur
+
+If the strict template contains [[EXACT]]...[[/EXACT]] blocks:
+- copy the text inside those blocks verbatim when it is clinically compatible with the current case
+- do not paraphrase, polish, or partially rewrite that exact text
+- if an exact block does not fit the current case, omit it rather than mutating it
+- never output the [[EXACT]] or [[/EXACT]] markers themselves
+- if a standalone parenthetical instruction immediately precedes an EXACT block, treat it as placement guidance for that exact block
+- examples of valid parenthetical directives include:
+  - (put this at the bottom)
+  - (place under Findings)
+  - (use this in Description of Procedure)
+- follow those directives when clinically compatible, but never output the parenthetical instruction itself
+
+Use the current case facts to fill in the rest of the note naturally around the strict template.
+"""
+
+STYLE_EXAMPLE_GUIDANCE = """
+The user has also provided a de-identified example note that reflects their preferred style.
+
+Use it as soft guidance for:
+- tone
+- sentence rhythm
+- organization
+- level of detail
+- surgeon-specific idiosyncrasies
+
+Do not copy stale patient-specific details from the style example.
+Strict template instructions override style-example preferences when they conflict.
+"""
+
 
 def _compact_case_facts(value):
     if isinstance(value, dict):
@@ -223,6 +262,51 @@ def _extract_template_placeholders(template_content: str):
         return []
     found = re.findall(r"\{([a-zA-Z0-9_]+)\}", template_content)
     return [p for p in found if p in SUPPORTED_TEMPLATE_PLACEHOLDERS]
+
+
+def _extract_exact_block_specs(template_content: str):
+    if not template_content:
+        return []
+    matches = re.finditer(
+        r"(?:(?:^|\n)\s*\((?P<directive>[^()\n]+)\)\s*\n\s*)?"
+        r"\[\[EXACT\]\](?P<block>.*?)\[\[/EXACT\]\]",
+        template_content,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    specs = []
+    for match in matches:
+        block = (match.group("block") or "").strip()
+        directive = (match.group("directive") or "").strip()
+        if not block:
+            continue
+        specs.append({
+            "text": block,
+            "placement": directive,
+        })
+    return specs
+
+
+def _extract_exact_blocks(template_content: str):
+    return [spec["text"] for spec in _extract_exact_block_specs(template_content)]
+
+
+def _strip_exact_markers(template_content: str):
+    if not template_content:
+        return ""
+    cleaned = re.sub(
+        r"(^|\n)\s*\([^()\n]+\)\s*(?=\n\s*\[\[EXACT\]\])",
+        r"\1",
+        template_content,
+        flags=re.IGNORECASE,
+    )
+    cleaned = re.sub(r"\[\[/?EXACT\]\]", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(
+        r"(^|\n)\s*\([^()\n]+\)\s*(?=\n\s*$)",
+        r"\1",
+        cleaned,
+        flags=re.IGNORECASE,
+    )
+    return cleaned
 
 
 def _build_note_specific_guidance(note_type: str) -> str:
@@ -384,12 +468,110 @@ Supported placeholders:
 """
 
 
-def build_prompt(case_facts, note_type="op_note", template_content=None):
+def _truncate_prompt_value(value, limit):
+    value = (value or "").strip()
+    if len(value) <= limit:
+        return value
+    return value[: limit - 3].rstrip() + "..."
+
+
+def _build_retrieved_examples_guidance(retrieved_examples):
+    if not retrieved_examples:
+        return ""
+
+    example_lines = []
+    for idx, example in enumerate(retrieved_examples[:3], start=1):
+        example_lines.append(
+            "\n".join([
+                f"Example {idx}:",
+                f"- Specialty: {example.get('specialty') or 'General Surgery'}",
+                f"- Note type: {(example.get('note_type') or '').replace('_', ' ')}",
+                f"- Title: {example.get('title') or 'Reviewed example'}",
+                f"- Source shorthand: {_truncate_prompt_value(example.get('shorthand_input'), 240)}",
+                f"- Gold output excerpt: {_truncate_prompt_value(example.get('corrected_output'), 1100)}",
+                f"- Reviewer lessons: {_truncate_prompt_value(example.get('lessons'), 320)}",
+            ])
+        )
+
+    joined_examples = "\n\n".join(example_lines)
+    return f"""
+High-confidence reviewed examples from the internal training corpus:
+{joined_examples}
+
+Use these examples as style-and-structure guidance only.
+- Prefer patterns that match the current specialty and note type.
+- Do not copy stale patient details or procedure-specific facts that are not supported by the current case.
+- If the retrieved examples conflict with the current case facts, follow the current case facts.
+"""
+
+
+def _build_template_profile_guidance(note_type: str, template_profile):
+    if not template_profile:
+        return ""
+
+    strict_template_text = (template_profile.get("strict_template_text") or "").strip()
+    style_example_text = (template_profile.get("style_example_text") or "").strip()
+    strict_enabled = bool(template_profile.get("strict_enabled"))
+    style_enabled = bool(template_profile.get("style_enabled"))
+    profile_name = (template_profile.get("name") or "Template profile").strip()
+
+    sections = [f"Active template profile: {profile_name}"]
+
+    if strict_enabled and strict_template_text:
+        clean_template = _strip_exact_markers(strict_template_text)
+        placeholder_guidance = _build_placeholder_mode_guidance(note_type, clean_template)
+        exact_specs = _extract_exact_block_specs(strict_template_text)
+        exact_block_section = ""
+        if exact_specs:
+            joined_blocks = "\n\n".join(
+                (
+                    f"Exact block {idx}:"
+                    + (f"\nPlacement guidance: {spec['placement']}" if spec.get("placement") else "")
+                    + f"\n{spec['text']}"
+                )
+                for idx, spec in enumerate(exact_specs, start=1)
+            )
+            exact_block_section = f"""
+Exact reusable wording blocks that must be copied verbatim when clinically compatible:
+{joined_blocks}
+"""
+
+        sections.append(f"""
+{STRICT_TEMPLATE_GUIDANCE}
+
+{placeholder_guidance}
+
+STRICT TEMPLATE:
+{clean_template}
+
+{exact_block_section}
+""".strip())
+
+    if style_enabled and style_example_text:
+        sections.append(f"""
+{STYLE_EXAMPLE_GUIDANCE}
+
+STYLE / TONE / ORGANIZATION EXAMPLE:
+{style_example_text}
+""".strip())
+
+    return "\n\n".join(section for section in sections if section)
+
+
+def build_prompt(
+    case_facts,
+    note_type="op_note",
+    template_content=None,
+    specialty="General Surgery",
+    retrieved_examples=None,
+    template_profile=None,
+):
     note_type = note_type if note_type in NOTE_TYPE_LABELS else "op_note"
     note_label = NOTE_TYPE_LABELS[note_type]
     note_instructions = NOTE_TYPE_INSTRUCTIONS[note_type]
     note_specific_guidance = _build_note_specific_guidance(note_type)
     reasoning_layer = _build_reasoning_layer(note_type)
+    specialty = (specialty or "General Surgery").strip() or "General Surgery"
 
     compact_case_json = json.dumps(
         _compact_case_facts(case_facts),
@@ -397,10 +579,9 @@ def build_prompt(case_facts, note_type="op_note", template_content=None):
         ensure_ascii=True,
     )
 
-    template_section = ""
-    if template_content:
+    template_section = _build_template_profile_guidance(note_type, template_profile)
+    if not template_section and template_content:
         placeholder_guidance = _build_placeholder_mode_guidance(note_type, template_content)
-
         template_section = f"""
 {TEMPLATE_GUIDANCE}
 
@@ -410,8 +591,10 @@ USER TEMPLATE / EXAMPLE NOTE:
 {template_content}
 """
 
+    retrieved_examples_section = _build_retrieved_examples_guidance(retrieved_examples)
+
     return f"""
-You are an expert surgical documentation assistant helping draft high-quality notes for a general surgeon.
+You are an expert surgical documentation assistant helping draft high-quality notes for {specialty.lower()}.
 
 Your task is to generate a polished {note_label}.
 
@@ -428,6 +611,8 @@ Your task is to generate a polished {note_label}.
 Structured case facts and source material:
 {compact_case_json}
 
+{retrieved_examples_section}
+
 {template_section}
 
 Final output requirements:
@@ -438,4 +623,90 @@ Final output requirements:
 - For consult notes, prefer brevity and shorthand-style clinical compression over polished explanatory prose
 - For consult notes, include the required [[FACT]]...[[/FACT]] and [[ASSUMPTION]]...[[/ASSUMPTION]] tags in the final output exactly as instructed
 - For consult notes, do not omit tagging on substantive body text. If a sentence or clause is not a heading, bullet marker, or blank line, it should be wrapped in either [[FACT]] or [[ASSUMPTION]].
+"""
+
+
+def build_scenario_generation_prompt(
+    specialty="General Surgery",
+    note_type="consult_note",
+    module_label=None,
+    module_description=None,
+    target_level=1,
+    count=3,
+    focus=None,
+    existing_titles=None,
+):
+    specialty = (specialty or "General Surgery").strip() or "General Surgery"
+    note_type = note_type if note_type in NOTE_TYPE_LABELS else "consult_note"
+    note_label = NOTE_TYPE_LABELS[note_type]
+    module_label = (module_label or "").strip() or "General Surgery Documentation Module"
+    module_description = (module_description or "").strip()
+    focus = (focus or "").strip()
+    existing_titles = existing_titles or []
+    count = max(1, min(int(count or 1), 6))
+    target_level = max(1, min(int(target_level or 1), 3))
+
+    existing_block = "\n".join(f"- {title}" for title in existing_titles[:30]) if existing_titles else "- None"
+    focus_block = f"\nAdditional focus request: {focus}" if focus else ""
+
+    return f"""
+You are designing synthetic training scenarios for a surgical documentation system.
+
+Generate {count} realistic, reviewer-ready scenarios for:
+- Specialty: {specialty}
+- Note type: {note_label}
+- Module: {module_label}
+- Target difficulty level: {target_level}{focus_block}
+
+Module goal:
+- {module_description or "Create scenarios that train one narrow documentation behavior well."}
+
+The goal is to create scenarios that reveal what the model still needs to learn, not generic trivia.
+
+Rules:
+- Make each scenario clinically plausible and specific enough that a surgeon could translate it into shorthand.
+- The goal is documentation training, not advanced clinical reasoning or operative decision-making.
+- Reviewers should be grading note quality, sectioning, and surgeon-like phrasing, not solving a difficult medical management problem.
+- Every scenario should feel like a variation inside the same documentation module, not a jump to a different surgical pattern.
+- The scenario_brief must read like a compact chart summary or handoff, not like shorthand.
+- The scenario_brief should be formatted as a short structured case packet with labeled blocks, not a single compressed sentence block.
+- For consult and clinic scenarios, use these exact labels in the scenario_brief:
+  Presentation:
+  Workup:
+  Current status / surgical question:
+- For operative scenarios, use these exact labels in the scenario_brief:
+  Indication:
+  Intraoperative findings:
+  Procedure / disposition:
+- Include enough concrete detail that a reviewer can rewrite it into surgeon shorthand without inventing missing facts.
+- Prefer 7-11 sentences for consult and clinic scenarios, and 6-9 sentences for operative scenarios.
+- Include as many of the following as are relevant: demographics, setting/service, symptom chronology, associated symptoms, pertinent PMH/PSH, key labs, key imaging, focused exam findings, immediate treatments already started, and the exact question being asked of surgery.
+- Do not compress the scenario into abbreviations or shorthand.
+- Do not use shorthand abbreviations like RLQ, RUQ, SBO, appy, lap appy, robo chole, PMH, PSH, NPO, or abbreviations of that kind inside the scenario_brief unless they are spelled out first.
+- Favor high-yield cases and common real-world variations for the specialty.
+- Level 1 should be bread-and-butter, straightforward cases with minimal comorbidity and a simple, obvious surgical question.
+- Level 2 should add modest ambiguity, one meaningful comorbidity, or a small formatting challenge, but still remain easy to review quickly.
+- Level 3 can be somewhat nuanced, but should still stay focused on documentation challenges rather than fellowship-level decision-making.
+- Avoid multidisciplinary planning, consent edge cases, ICU-level complexity, dialysis timing questions, and long differential-diagnosis style dilemmas unless explicitly requested.
+- Vary diagnoses, operative decisions, and documentation challenges.
+- Do not repeat existing scenarios or create near-duplicate titles.
+- Do not mention that the scenario is synthetic.
+- Keep the scenario focused on facts a surgeon would care about, but make it detailed enough for shorthand translation.
+- The learning objectives should be one short sentence focused only on documentation craft.
+- The learning objectives should not teach medicine, operative judgment, or residency-level management.
+
+Existing scenario titles to avoid:
+{existing_block}
+
+Return valid JSON only as an array of objects.
+
+Each object must contain exactly these keys:
+- title
+- diagnosis
+- procedure_focus
+- complexity_level
+- scenario_brief
+- learning_objectives
+
+The complexity_level must be an integer 1, 2, or 3 matching the requested difficulty.
 """

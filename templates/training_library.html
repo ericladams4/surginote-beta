@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SurgiNote Admin - Training Library</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body class="app-page">
+  <div class="app-overlay">
+    <main class="app-shell">
+
+      {% include "_admin_header.html" %}
+
+      <section class="app-card sample-library-shell">
+        <div class="card-label">Training library</div>
+
+        <form method="GET" class="sample-filter-row training-filter-row">
+          <select name="specialty" class="app-select sample-filter-select">
+            <option value="">All specialties</option>
+            {% for row in specialties %}
+              <option value="{{ row['specialty'] }}" {% if selected_specialty == row['specialty'] %}selected{% endif %}>
+                {{ row["specialty"] }}
+              </option>
+            {% endfor %}
+          </select>
+
+          <select name="note_type" class="app-select sample-filter-select">
+            <option value="">All note types</option>
+            {% for note_type in note_types %}
+              <option value="{{ note_type }}" {% if selected_note_type == note_type %}selected{% endif %}>
+                {{ note_type.replace("_", " ").title() }}
+              </option>
+            {% endfor %}
+          </select>
+
+          <select name="status" class="app-select sample-filter-select">
+            <option value="">All statuses</option>
+            {% for training_status in training_statuses %}
+              <option value="{{ training_status }}" {% if selected_status == training_status %}selected{% endif %}>
+                {{ training_status.replace("_", " ").title() }}
+              </option>
+            {% endfor %}
+          </select>
+
+          <button type="submit" class="secondary-action sample-filter-button">Filter</button>
+        </form>
+
+        {% if training_examples and training_examples|length > 0 %}
+          <div class="sample-library-list">
+            {% for row in training_examples %}
+              <article class="sample-library-card">
+
+                <div class="sample-library-top">
+                  <div class="sample-library-top-left">
+                    <div class="sample-library-procedure">{{ row["specialty"] }}</div>
+                    <h2 class="sample-library-title">
+                      {{ row["title"] if row["title"] else "Untitled training example" }}
+                    </h2>
+                  </div>
+
+                  <div class="sample-library-top-right">
+                    <div class="sample-library-date">{{ row["updated_at"] }}</div>
+                  </div>
+                </div>
+
+                <div class="sample-library-tags-row">
+                  <span class="sample-tag-pill">{{ row["note_type"].replace("_", " ").title() }}</span>
+                  <span class="sample-tag-pill">{{ row["status"].replace("_", " ").title() }}</span>
+                  {% if row["issue_tags"] %}
+                    {% for tag in row["issue_tags"].split(",") %}
+                      {% if tag.strip() %}
+                        <span class="sample-tag-pill">{{ tag.strip() }}</span>
+                      {% endif %}
+                    {% endfor %}
+                  {% endif %}
+                </div>
+
+                <div class="sample-library-actions">
+                  <a href="/admin/training-library/{{ row['id'] }}/edit" class="secondary-action admin-link-button">Edit</a>
+
+                  <form method="POST" action="/admin/training-library/{{ row['id'] }}/delete" class="inline-action-form" onsubmit="return confirm('Delete this training example?');">
+                    <button type="submit" class="secondary-action destructive-action">Delete</button>
+                  </form>
+                </div>
+
+                <div class="sample-library-columns training-library-columns">
+                  <section class="sample-library-panel">
+                    <div class="sample-panel-label">Shorthand input</div>
+                    <div class="sample-panel-body sample-panel-body-short">
+                      <pre class="sample-panel-pre">{{ row["shorthand_input"] }}</pre>
+                    </div>
+                  </section>
+
+                  <section class="sample-library-panel">
+                    <div class="sample-panel-label">Generated draft</div>
+                    <div class="sample-panel-body sample-panel-body-note">
+                      <pre class="sample-panel-pre">{{ row["generated_draft"] if row["generated_draft"] else "No draft stored." }}</pre>
+                    </div>
+                  </section>
+
+                  <section class="sample-library-panel">
+                    <div class="sample-panel-label">Corrected gold output</div>
+                    <div class="sample-panel-body sample-panel-body-note">
+                      <pre class="sample-panel-pre">{{ row["corrected_output"] }}</pre>
+                    </div>
+                  </section>
+                </div>
+
+                {% if row["editor_notes"] %}
+                  <div class="training-editor-notes">
+                    <div class="sample-panel-label">Editor notes</div>
+                    <div class="sample-panel-body">
+                      <pre class="sample-panel-pre">{{ row["editor_notes"] }}</pre>
+                    </div>
+                  </div>
+                {% endif %}
+
+              </article>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="structured-empty">No training examples saved yet.</div>
+        {% endif %}
+      </section>
+
+    </main>
+    {% include "_site_footer.html" %}
+  </div>
+</body>
+</html>
