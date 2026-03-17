@@ -3,6 +3,7 @@ import os
 import re
 from functools import wraps
 from pathlib import Path
+from time import perf_counter
 
 import requests
 from dotenv import load_dotenv
@@ -106,6 +107,7 @@ def get_or_create_user(phone: str):
 
 
 def build_generation_context(payload):
+    started_at = perf_counter()
     shorthand = (payload.get("shorthand") or "").strip()
     note_type = (payload.get("note_type") or "op_note").strip()
 
@@ -118,9 +120,12 @@ def build_generation_context(payload):
     if not os.getenv("OPENAI_API_KEY"):
         return None, jsonify({"error": "Missing OPENAI_API_KEY environment variable"}), 500
 
+    parse_started_at = perf_counter()
     case_facts = build_case_facts(shorthand)
+    parse_ms = round((perf_counter() - parse_started_at) * 1000, 1)
 
     user_id = session["user_id"]
+    template_started_at = perf_counter()
     conn = get_conn()
     cur = conn.cursor()
     cur.execute(
@@ -129,14 +134,17 @@ def build_generation_context(payload):
     )
     row = cur.fetchone()
     conn.close()
+    template_lookup_ms = round((perf_counter() - template_started_at) * 1000, 1)
 
     template_content = row["content"] if row else None
 
+    prompt_started_at = perf_counter()
     prompt = build_prompt(
         case_facts=case_facts,
         note_type=note_type,
         template_content=template_content
     )
+    prompt_build_ms = round((perf_counter() - prompt_started_at) * 1000, 1)
 
     procedure_key = case_facts.get("procedure")
     procedure_label = PROCEDURE_LABELS.get(procedure_key, "Unknown")
@@ -148,6 +156,12 @@ def build_generation_context(payload):
         "template_content": template_content,
         "prompt": prompt,
         "procedure_label": procedure_label,
+        "timings": {
+            "parse_ms": parse_ms,
+            "template_lookup_ms": template_lookup_ms,
+            "prompt_build_ms": prompt_build_ms,
+            "prep_total_ms": round((perf_counter() - started_at) * 1000, 1),
+        },
     }
     return context, None, None
 
@@ -213,6 +227,16 @@ def logout():
 @app.route("/")
 def landing():
     return render_template("landing.html")
+
+
+@app.route("/terms")
+def terms():
+    return render_template("terms.html")
+
+
+@app.route("/privacy")
+def privacy():
+    return render_template("privacy.html")
 
 
 @app.route("/app")
@@ -392,12 +416,16 @@ def generate_note_stream():
     prompt = context["prompt"]
 
     def generate():
+        request_started_at = perf_counter()
+        first_delta_ms = None
+
         yield sse_event({
             "type": "meta",
             "case_facts": context["case_facts"],
             "procedure_label": context["procedure_label"],
             "note_type": context["note_type"],
             "used_template": bool(context["template_content"]),
+            "timings": context.get("timings", {}),
         })
 
         try:
@@ -441,11 +469,20 @@ def generate_note_stream():
                     if event_type == "response.output_text.delta":
                         delta = event.get("delta", "")
                         if delta:
+                            if first_delta_ms is None:
+                                first_delta_ms = round((perf_counter() - request_started_at) * 1000, 1)
                             yield sse_event({"type": "delta", "delta": delta})
 
                     elif event_type == "response.completed":
                         saw_done = True
-                        yield sse_event({"type": "done"})
+                        yield sse_event({
+                            "type": "done",
+                            "timings": {
+                                **context.get("timings", {}),
+                                "first_delta_ms": first_delta_ms,
+                                "stream_total_ms": round((perf_counter() - request_started_at) * 1000, 1),
+                            }
+                        })
 
                     elif event_type == "response.error":
                         message = event.get("error", {}).get("message", "Streaming failed.")
@@ -453,7 +490,14 @@ def generate_note_stream():
                         return
 
                 if not saw_done:
-                    yield sse_event({"type": "done"})
+                    yield sse_event({
+                        "type": "done",
+                        "timings": {
+                            **context.get("timings", {}),
+                            "first_delta_ms": first_delta_ms,
+                            "stream_total_ms": round((perf_counter() - request_started_at) * 1000, 1),
+                        }
+                    })
 
         except requests.HTTPError as e:
             try:

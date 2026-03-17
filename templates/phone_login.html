@@ -12,13 +12,17 @@
     <main class="login-shell-wide">
 
       <div class="login-topbar">
-        <a href="/" class="login-brand-left">SurgiNote</a>
+        <a href="/" class="brand-link">
+          <div class="brand-logo brand-logo-white">
+            SurgiNote <span class="brand-beta">Beta</span>
+          </div>
+        </a>
       </div>
 
-      <div style="width:100%;max-width:1000px;margin:0 auto;">
-        <section class="login-wide-card" style="display:flex;justify-content:center;">
-          <div style="width:100%;max-width:520px;margin:0 auto;">
-            <p class="login-subtitle" style="margin-bottom:18px;">
+      <div class="phone-login-wrap">
+        <section class="login-wide-card phone-login-card">
+          <div class="phone-login-inner">
+            <p class="login-subtitle phone-login-subtitle">
               Enter your mobile number to continue.
             </p>
 
@@ -36,7 +40,7 @@
               </button>
             </div>
 
-            <div class="login-status-row centered" style="text-align:center;">
+            <div class="login-status-row centered phone-login-status">
               <div id="authMessage" class="feedback-status login-status-placeholder">&nbsp;</div>
             </div>
           </div>
@@ -44,6 +48,7 @@
       </div>
 
     </main>
+    {% include "_site_footer.html" %}
   </div>
 
   <script>

@@ -15,8 +15,9 @@
 <header class="app-header">
 
 <div class="app-brand">
-<div class="app-logo">SurgiNote</div>
-<div class="app-product-tag">Beta</div>
+<div class="brand-logo brand-logo-white">
+SurgiNote <span class="brand-beta">Beta</span>
+</div>
 </div>
 
 <div class="app-header-links">
@@ -44,11 +45,37 @@ Templates
 <p class="card-helper">Choose the type of note you want to generate.</p>
 
 <div class="card-action-row">
-<select id="noteType" class="app-select">
+<div class="app-select-wrap note-type-select-wrap">
+<select id="noteType" class="app-select app-select-prominent app-select-native-hidden" aria-hidden="true" tabindex="-1">
 <option value="op_note">Op Note</option>
 <option value="clinic_note">Clinic Note</option>
-<option value="consult_note">Consult Note</option>
+<option value="consult_note" selected>Consult Note</option>
 </select>
+<button
+type="button"
+id="noteTypeTrigger"
+class="note-type-trigger"
+aria-haspopup="listbox"
+aria-expanded="false"
+aria-labelledby="noteTypeLabelText"
+>
+<span id="noteTypeLabelText" class="note-type-trigger-label">Consult Note</span>
+</button>
+<div id="noteTypeMenu" class="note-type-menu hidden" role="listbox" aria-label="Note type">
+<button type="button" class="note-type-option" data-value="consult_note" role="option" aria-selected="true">
+<span class="note-type-option-title">Consult Note</span>
+<span class="note-type-option-detail">Inpatient or ED surgical consults</span>
+</button>
+<button type="button" class="note-type-option" data-value="clinic_note" role="option" aria-selected="false">
+<span class="note-type-option-title">Clinic Note</span>
+<span class="note-type-option-detail">Office visits and follow-up notes</span>
+</button>
+<button type="button" class="note-type-option" data-value="op_note" role="option" aria-selected="false">
+<span class="note-type-option-title">Op Note</span>
+<span class="note-type-option-detail">Operative reports and procedures</span>
+</button>
+</div>
+</div>
 </div>
 
 <div class="card-label" style="margin-top:18px;">Enter shorthand</div>
@@ -65,6 +92,9 @@ placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Lap chol
 <button id="generateBtn" class="primary-action">
 Generate note
 </button>
+<button id="demoBtn" class="outline-action">
+Demo
+</button>
 </div>
 
 </div>
@@ -78,7 +108,7 @@ Generate note
 
 <div class="output-header-copy">
 <div class="card-label" id="outputLabel">
-Generated Op Note
+Generated Consult Note
 </div>
 <p class="card-helper subtle-light">
 Review and edit before use.
@@ -96,10 +126,14 @@ Email draft
 
 </div>
 
-<div id="generatingStatus" class="generating-status"></div>
-
 <div id="outputWrap" class="output-wrap">
+<div id="consultOutput" class="consult-output hidden"></div>
 <textarea id="output" class="app-output-text" rows="22"></textarea>
+<div id="generatingStatus" class="generating-status hidden" aria-live="polite">
+<div class="generating-status-spinner"></div>
+<div id="generatingStatusText" class="generating-status-text">Generating note...</div>
+<div id="generatingStatusSubtext" class="generating-status-subtext">Anesthesia delay.</div>
+</div>
 </div>
 
 </div>
@@ -107,8 +141,6 @@ Email draft
 </div>
 
 </section>
-</main>
-</div>
 
 <!-- TEMPLATE MODAL -->
 
@@ -208,6 +240,9 @@ Submit feedback
 <div id="feedbackStatus" class="feedback-status"></div>
 
 </div>
+</div>
+</main>
+{% include "_site_footer.html" %}
 </div>
 
 <script src="/static/app.js"></script>

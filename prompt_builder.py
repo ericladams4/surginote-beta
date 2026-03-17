@@ -78,6 +78,9 @@ Formatting requirements:
 - then write the plan as bullet points
 - never number the assessment
 - never number the plan
+- the note should feel clinically complete and demo-worthy, not skeletal
+- prefer enough detail that another surgeon could quickly understand the consult question, supporting data, and near-term plan
+- Each required consult section header must appear on its own line, with the section content starting on the next line.
 
 HPI requirements:
 The HPI must clearly describe the presenting pain/symptoms and should include, when supported or reasonably inferable:
@@ -87,8 +90,12 @@ The HPI must clearly describe the presenting pain/symptoms and should include, w
 - duration / onset
 - exacerbating or alleviating factors
 - associated symptoms
+- Write the HPI as one continuous paragraph with contiguous sentences.
+- Do not insert random line breaks, extra paragraph breaks, or indented fragments within the HPI.
 
 If exacerbating or alleviating factors are not mentioned, state that there are no specific exacerbating or alleviating factors.
+
+If a key HPI pain descriptor is missing, it is acceptable to infer a concise likely descriptor from a strongly supported acute surgical diagnosis. For example, if the source strongly supports acute appendicitis, you may reasonably infer the corresponding pain quality or intensity even if not explicitly stated. Any such inferred HPI wording must be treated as an assumption and wrapped in [[ASSUMPTION]]...[[/ASSUMPTION]].
 
 After the core symptom description, include a brief hospitalization summary when supported by the source material. This may include:
 - admission service or care setting
@@ -102,11 +109,14 @@ Keep this hospitalization summary brief and clinically useful, not repetitive.
 History section defaults:
 - If Family History is not explicitly mentioned, write: "Non-contributory."
 - If Social History is not explicitly mentioned, write: "Denies alcohol use, tobacco use, drug use."
+- If Past Medical History is not explicitly mentioned, write a concise neutral statement such as: "None reported."
+- If Past Surgical History is not explicitly mentioned, write a concise neutral statement such as: "None reported." or "No prior abdominal surgery reported." when that phrasing is more clinically useful.
 
 Review of Systems requirements:
 - Keep ROS lightweight and concise.
 - Default to negative/normal systems unless symptoms are specified.
 - Reflect the presenting complaint when relevant, but do not create unsupported positives.
+- Prefer a one-line ROS summary when the case is straightforward rather than omitting the section entirely.
 
 Objective requirements:
 - Must include a physical exam under the "Objective" section.
@@ -126,6 +136,12 @@ Objective requirements:
   - if abdominal findings are supported, reflect them accurately
   - if no abnormal abdominal findings are provided, default to:
     "Soft, non-tender, non-distended, no guarding, no hernias or masses appreciated"
+  - if CT findings support appendicitis, assume focal right lower quadrant tenderness
+  - if CT findings support cholecystitis, assume focal right upper quadrant tenderness
+- When supported, include concise lab and imaging lines in Objective so the note captures the key workup, not just the exam.
+- Prefer compressed clinical formatting such as:
+  - Labs: ...
+  - Imaging: ...
 
 Assessment and Plan brevity requirements:
 - The assessment must be brief: usually 2–3 sentences maximum.
@@ -136,6 +152,7 @@ Assessment and Plan brevity requirements:
 - Do not include unnecessary contingency planning unless strongly supported.
 - Each plan bullet should usually be a short action phrase, not a full paragraph.
 - Similar information density is desired, but with shorter phrasing and less narrative.
+- Even when concise, the plan should usually cover disposition/location of care, diet/fluids, antibiotics or other immediate treatment when relevant, symptom control, and operative timing or follow-up recommendations as appropriate to the case.
 
 Consult style rules:
 - emphasize the reason for consultation, the key clinical facts, the surgical impression, and actionable recommendations
@@ -181,6 +198,24 @@ Dynamic formatting rules:
 - Prefer realistic clinical formatting over completeness for its own sake.
 - The note should feel like something a practicing surgeon would actually write in workflow.
 """
+
+
+def _compact_case_facts(value):
+    if isinstance(value, dict):
+        compacted = {
+            k: _compact_case_facts(v)
+            for k, v in value.items()
+        }
+        return {
+            k: v for k, v in compacted.items()
+            if v not in (None, "", [], {})
+        }
+
+    if isinstance(value, list):
+        compacted = [_compact_case_facts(v) for v in value]
+        return [v for v in compacted if v not in (None, "", [], {})]
+
+    return value
 
 
 def _extract_template_placeholders(template_content: str):
@@ -240,54 +275,15 @@ Additional consult note guidance:
 - Make it clear what question surgery is being asked to address.
 - Use the required consult sections even when the source material is sparse.
 - The Assessment and Plan section is the most important part of the note.
-
-HPI expectations:
-- Start with the symptom story.
-- Then add a brief hospitalization/course summary if available, including service, labs, imaging, and pertinent exam findings.
-- Do not let the HPI become overly long or repetitive.
-
-Objective expectations:
-- Present the physical exam in formal exam format.
-- Prefer separate exam lines:
-  - Gen:
-  - HEENT:
-  - Pulmonary:
-  - Cardiovascular:
-  - Abdomen:
-- If source material is sparse, default to:
-  - Gen: No acute distress, comfortable
-  - HEENT: Normocephalic, atraumatic
-  - Pulmonary: Normal work of breathing
-  - Cardiovascular: Warm and well perfused
-  - Abdomen: Soft, non-tender, non-distended, no guarding, no hernias or masses appreciated
-- If abnormal abdominal findings are present in the source material, replace the abdominal default with supported findings.
-
-Assessment and Plan expectations:
-- Start with a short assessment paragraph, not bullets and not numbering.
-- The assessment paragraph should include:
-  - a brief opening statement summarizing the patient and surgical issue
-  - the most likely diagnosis or leading differential if not yet definitive
-  - concise clinical reasoning linking the diagnosis to symptoms, exam, labs, and/or imaging
-  - the rationale for operative versus nonoperative management
-- Keep the assessment to 2–3 sentences whenever possible.
-- Prefer terse attending-style language.
-
-- After the assessment paragraph, leave one blank line.
-- Then provide the plan as bullet points only.
-- Use 3–6 bullets whenever possible.
-- Each bullet should contain one actionable recommendation in compressed form.
-- Avoid long rationale within bullets unless clinically necessary.
-- Never number the plan.
-
-Examples of preferred bullet style:
-- Admit to surgery
-- NPO / IV fluids
-- IV antibiotics
-- Serial abdominal exams
-- OR tomorrow
-
-- If the consult is sparse, keep the overall note concise.
-- If the example note has a distinctive consult structure or recommendation style, try to match it when appropriate.
+- Keep HPI clinically efficient: symptom story first, then brief hospital course with key labs/imaging/exam if available.
+- If key pain descriptors are missing, you may infer concise likely wording from a strongly supported acute diagnosis, but tag that wording as [[ASSUMPTION]]...[[/ASSUMPTION]].
+- In Objective, use formal exam lines (Gen, HEENT, Pulmonary, Cardiovascular, Abdomen) plus concise Labs/Imaging lines when supported.
+- If exam details are sparse, use the neutral defaults from the consult note instructions; if CT supports appendicitis or cholecystitis and no abdominal exam is given, assume focal RLQ or RUQ tenderness respectively, tagged as ASSUMPTION.
+- ROS and physical exam content default to ASSUMPTION unless explicitly provided or explicitly stated as normal/negative.
+- Assessment should be a short attending-style paragraph synthesizing diagnosis, supporting facts, and operative vs nonoperative reasoning.
+- Plan should follow after one blank line as 3-6 hyphen bullets with one actionable item each.
+- If the consult is sparse, keep the note concise; if the example note has a distinctive consult structure or recommendation style, match it when appropriate.
+- For consult notes, every substantive body-text segment should be tagged as [[FACT]] or [[ASSUMPTION]]. Headings, punctuation, bullet markers, and blank lines may remain untagged.
 """
     return ""
 
@@ -296,13 +292,11 @@ def _build_reasoning_layer(note_type: str) -> str:
     if note_type == "consult_note":
         return """
 Before writing the note, internally reason through the following:
-1. What is the surgical question or reason for consult?
-2. What is the most likely diagnosis or primary surgical issue?
-3. What supporting facts matter most (symptoms, exam, imaging, labs)?
-4. What PMH, PSH, family history, social history, ROS, and objective details are explicitly available?
-5. What default consult-history wording is required if family history or social history are not provided?
-6. Does the patient appear to need operative intervention, further workup, or conservative management?
-7. What is the shortest, clearest way to communicate the assessment and recommendations?
+1. What is the consult question and most likely surgical issue?
+2. Which facts matter most: symptoms, exam, labs, imaging, hospital course?
+3. Which history/ROS/objective details are explicit vs assumed?
+4. What default history wording is required?
+5. What is the clearest concise assessment and near-term plan?
 
 Do not output these reasoning steps.
 Only output the final note.
@@ -397,7 +391,11 @@ def build_prompt(case_facts, note_type="op_note", template_content=None):
     note_specific_guidance = _build_note_specific_guidance(note_type)
     reasoning_layer = _build_reasoning_layer(note_type)
 
-    case_json = json.dumps(case_facts, indent=2)
+    compact_case_json = json.dumps(
+        _compact_case_facts(case_facts),
+        separators=(",", ":"),
+        ensure_ascii=True,
+    )
 
     template_section = ""
     if template_content:
@@ -428,7 +426,7 @@ Your task is to generate a polished {note_label}.
 {reasoning_layer}
 
 Structured case facts and source material:
-{case_json}
+{compact_case_json}
 
 {template_section}
 
@@ -438,4 +436,6 @@ Final output requirements:
 - Make the note ready for physician review and editing
 - Use only the sections supported by the case and useful for the note type, except where consult-note sections are required
 - For consult notes, prefer brevity and shorthand-style clinical compression over polished explanatory prose
+- For consult notes, include the required [[FACT]]...[[/FACT]] and [[ASSUMPTION]]...[[/ASSUMPTION]] tags in the final output exactly as instructed
+- For consult notes, do not omit tagging on substantive body text. If a sentence or clause is not a heading, bullet marker, or blank line, it should be wrapped in either [[FACT]] or [[ASSUMPTION]].
 """

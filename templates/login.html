@@ -12,7 +12,11 @@
     <main class="login-shell-wide">
 
 <div class="login-topbar">
-  <a href="/" class="login-brand-left">SurgiNote</a>
+  <a href="/" class="brand-link">
+    <div class="brand-logo brand-logo-white">
+      SurgiNote <span class="brand-beta">Beta</span>
+    </div>
+  </a>
 </div>
 
       <section class="login-wide-card">
@@ -88,6 +92,7 @@
       </section>
 
     </main>
+    {% include "_site_footer.html" %}
   </div>
 
   {% if mode != "admin" %}

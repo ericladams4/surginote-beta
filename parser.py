@@ -756,6 +756,11 @@ def extract_formal_exam_defaults(text: str, exam_findings):
         "abdomen": "Soft, non-tender, non-distended, no guarding, no hernias or masses appreciated",
     }
 
+    if "appendicitis" in text:
+        exam["abdomen"] = "Soft, focal right lower quadrant tenderness to palpation"
+    elif "cholecystitis" in text:
+        exam["abdomen"] = "Soft, focal right upper quadrant tenderness to palpation"
+
     if "distended" in exam_findings:
         exam["abdomen"] = "Soft, mildly distended"
     if "tenderness" in exam_findings:

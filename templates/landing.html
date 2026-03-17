@@ -52,7 +52,7 @@
       <section class="hero-grid">
         <div class="hero-copy">
           <h1 class="landing-headline">
-            Surgical Documentation<br />
+            Painless documentation<br />
             for General Surgeons
           </h1>
 
@@ -60,9 +60,6 @@
             Converts shorthand into polished operative, clinic, and consult notes in seconds.
           </p>
 
-          <p class="landing-subcopy-secondary">
-            Built for real surgical workflows, with note structures that can be tailored to each surgeon’s preferred style.
-          </p>
         </div>
 
         <div class="hero-cta-cluster">
@@ -76,105 +73,132 @@
         <div class="demo-column demo-column-input">
           <div class="demo-label">Example shorthand</div>
           <div class="demo-input" id="demoInput">
-            29yoF gallstone pancreatitis s/p ERCP w stone retrieval. Labs wnl. Lap chole 3 ports uncomplicated.
+            34yoM no PMH here w/ 18hrs lower quadrant pain, nausea, anorexia. CT showing uncomplicated appy. Admit, NPO, ceftriaxone/Flagyl, lap appy in AM.
           </div>
         </div>
 
         <div class="demo-transform-arrow" id="demoArrow">→</div>
 
         <div class="demo-column demo-column-output">
-          <div class="demo-label">Generated operative note</div>
-          <pre class="demo-output" id="demoOutput"></pre>
+          <div class="demo-label">Generated consult note</div>
+          <div class="demo-output demo-output-consult" id="demoOutput"></div>
         </div>
       </section>
 
-      <section class="feature-strip">
-        <ul class="feature-list">
-          <li>Operative notes</li>
-          <li>Clinic notes</li>
-          <li>Consult notes</li>
-          <li>Template-based formatting</li>
-          <li>Built for surgeons</li>
-        </ul>
-      </section>
-
     </div>
+    {% include "_site_footer.html" %}
   </div>
 
   <script>
-    const demoText = `Procedure: Laparoscopic cholecystectomy
-
-Indication:
-The patient is a 29-year-old female with recent gallstone pancreatitis status post ERCP with successful stone retrieval. Following clinical improvement and normalization of laboratory values, she was brought to the operating room for definitive management with laparoscopic cholecystectomy.
-
-Findings:
-Mildly inflamed gallbladder. No evidence of perforation or gangrene. Routine anatomy.
-
-Description of procedure:
-After informed consent was confirmed, the patient was brought to the operating room and placed supine on the operating table. General endotracheal anesthesia was induced without difficulty. The abdomen was prepped and draped in the usual sterile fashion. A surgical time-out was performed.
-
-Pneumoperitoneum was established and three laparoscopic ports were placed under direct visualization. The gallbladder was identified and retracted cephalad. Dissection was carried out within the hepatocystic triangle until the critical view of safety was obtained. The cystic duct and cystic artery were each identified, clipped, and divided in standard fashion.
-
-The gallbladder was then dissected off the liver bed using electrocautery and removed. The operative field was irrigated and inspected, and hemostasis was confirmed. No bile leak was identified. No drain was placed.
-
-Estimated blood loss:
-Minimal
-
-Specimens:
-Gallbladder
-
-Drains:
-None
-
-Complications:
-None
-
-Disposition:
-The patient tolerated the procedure well and was transferred to the recovery area in stable condition.`;
+    const demoSegments = [
+      { type: "heading", value: "Reason for Consult:" },
+      { type: "text", value: "\nAcute appendicitis\n\n" },
+      { type: "heading", value: "HPI:" },
+      { type: "text", value: "\n34-year-old male admitted to medicine with 18 hours of " },
+      { type: "assumption", value: "right lower quadrant" },
+      { type: "text", value: " abdominal pain associated with nausea and anorexia. There are no specific exacerbating or alleviating factors. CT imaging is consistent with acute appendicitis without perforation or abscess. Labs are notable for leukocytosis to 14. General surgery was consulted for operative evaluation and management.\n\n" },
+      { type: "heading", value: "Past Medical History:" },
+      { type: "text", value: "\nNone reported.\n\n" },
+      { type: "heading", value: "Past Surgical History:" },
+      { type: "text", value: "\nNo prior abdominal surgery reported.\n\n" },
+      { type: "heading", value: "Family History:" },
+      { type: "text", value: "\nNon-contributory.\n\n" },
+      { type: "heading", value: "Social History:" },
+      { type: "text", value: "\nDenies tobacco, alcohol, and illicit drug use.\n\n" },
+      { type: "heading", value: "Review of Systems:" },
+      { type: "text", value: "\nPositive for abdominal pain, nausea, and anorexia. Negative for chest pain, dyspnea, and urinary symptoms.\n\n" },
+      { type: "heading", value: "Objective:" },
+      { type: "text", value: "\nGen: No acute distress, resting comfortably\nHEENT: Normocephalic, atraumatic\nPulmonary: Normal work of breathing on room air\nCardiovascular: Warm and well perfused\nAbdomen: Soft, focal " },
+      { type: "assumption", value: "right lower quadrant" },
+      { type: "text", value: " tenderness to palpation, no diffuse peritonitis\nLabs: WBC 14\nImaging: CT abdomen/pelvis consistent with acute uncomplicated appendicitis without perforation or abscess\n\n" },
+      { type: "heading", value: "Assessment and Plan:" },
+      { type: "text", value: "\n34-year-old male with CT-confirmed acute uncomplicated appendicitis. Clinical presentation, leukocytosis, and focal exam findings are concordant with an operative surgical process. He is hemodynamically stable without imaging evidence of perforation or abscess and is an appropriate candidate for urgent laparoscopic appendectomy.\n\n- Admit to general surgery\n- NPO / IV fluids\n- IV antibiotics\n- Pain and nausea control\n- Laparoscopic appendectomy this admission\n- Serial abdominal exams until OR" }
+    ];
 
     const outputEl = document.getElementById("demoOutput");
     const arrowEl = document.getElementById("demoArrow");
     const inputEl = document.getElementById("demoInput");
+    const demoBubbleHtml = `
+      <div class="demo-assumption-popover visible demo-assumption-popover-subtle">
+        <div class="demo-assumption-label">Assumption</div>
+        <div class="demo-assumption-value">right lower quadrant</div>
+        <div class="demo-assumption-help">Inferred from CT-confirmed appendicitis.</div>
+      </div>`;
 
-    let i = 0;
-    let caretVisible = true;
-    let caretInterval = null;
+    let segmentIndex = 0;
+    let charIndex = 0;
     let typingTimeout = null;
+    let bubbleVisible = false;
 
-    function renderWithCaret(text) {
-      outputEl.textContent = text + (caretVisible ? "▌" : "");
+    function escapeHtml(text) {
+      return String(text)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
     }
 
-    function startCaretBlink(finalText) {
-      if (caretInterval) clearInterval(caretInterval);
-      caretInterval = setInterval(() => {
-        caretVisible = !caretVisible;
-        renderWithCaret(finalText);
-      }, 500);
+    function renderDemo(includeBubble = false) {
+      let html = "";
+
+      for (let i = 0; i < segmentIndex; i++) {
+        const segment = demoSegments[i];
+        if (segment.type === "heading") {
+          html += `<span class="demo-consult-heading">${escapeHtml(segment.value)}</span>`;
+        } else if (segment.type === "assumption") {
+          html += `<span class="demo-consult-assumption">${escapeHtml(segment.value)}</span>`;
+        } else {
+          html += escapeHtml(segment.value);
+        }
+      }
+
+      if (segmentIndex < demoSegments.length) {
+        const segment = demoSegments[segmentIndex];
+        const partial = escapeHtml(segment.value.slice(0, charIndex));
+        if (segment.type === "heading") {
+          html += `<span class="demo-consult-heading">${partial}</span>`;
+        } else if (segment.type === "assumption") {
+          html += `<span class="demo-consult-assumption">${partial}</span>`;
+        } else {
+          html += partial;
+        }
+      }
+
+      outputEl.innerHTML = html.replace(/\n/g, "<br>") + (includeBubble ? demoBubbleHtml : "");
     }
 
     function typeDemo() {
-      if (i < demoText.length) {
-        const currentText = demoText.slice(0, i + 1);
-        renderWithCaret(currentText);
-        i++;
-        typingTimeout = setTimeout(typeDemo, 8);
-      } else {
-        startCaretBlink(demoText);
+      if (segmentIndex >= demoSegments.length) {
+        renderDemo(bubbleVisible);
+        return;
       }
+
+      const currentSegment = demoSegments[segmentIndex];
+      charIndex += 1;
+      if (currentSegment.type === "assumption") {
+        bubbleVisible = true;
+      }
+      renderDemo(bubbleVisible);
+
+      if (charIndex >= currentSegment.value.length) {
+        segmentIndex += 1;
+        charIndex = 0;
+      }
+
+      typingTimeout = setTimeout(typeDemo, currentSegment.type === "assumption" ? 28 : 8);
     }
 
     window.addEventListener("load", () => {
-      i = 0;
-      caretVisible = true;
-
-      if (caretInterval) clearInterval(caretInterval);
+      segmentIndex = 0;
+      charIndex = 0;
+      bubbleVisible = false;
       if (typingTimeout) clearTimeout(typingTimeout);
 
       inputEl.style.opacity = 0;
       arrowEl.style.opacity = 0;
       outputEl.style.opacity = 0;
-      outputEl.textContent = "";
+      outputEl.innerHTML = "";
 
       setTimeout(() => {
         inputEl.style.opacity = 1;
