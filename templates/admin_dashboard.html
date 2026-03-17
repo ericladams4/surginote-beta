@@ -72,25 +72,27 @@
       <section class="app-card admin-analytics-card admin-teaching-paths-card">
         <div class="admin-section-head">
           <div>
-            <div class="card-label">Teaching paths</div>
-            <p class="card-helper">Every system-wide improvement should flow through one of these three paths: rescue weak live notes, expand the expert gold-standard canon, or refresh urgent model-generated learning scenarios.</p>
+            <div class="card-label">Learning contribution</div>
+            <p class="card-helper">Share of active learning inputs currently shaping the global SurgiNote system across the three teaching domains.</p>
+          </div>
+          <div class="admin-contribution-summary">
+            <span class="admin-contribution-summary-value">{{ learning_contributions.total_assets_display }}</span>
+            <span class="admin-contribution-summary-helper">{{ learning_contributions.dominant_title }} leads at {{ learning_contributions.dominant_share_display }}</span>
           </div>
         </div>
-        <div class="admin-guide-grid">
-          {% for lane in training_guide %}
-            <section class="admin-guide-item admin-guide-lane">
-              <div class="card-label">{{ lane.eyebrow }}</div>
-              <div class="admin-guide-title">{{ lane.title }}</div>
-              <div class="admin-guide-helper">{{ lane.helper }}</div>
-              <div class="admin-guide-meta">{{ lane.meta }}</div>
-              <div class="admin-guide-link-list">
-                {% for link in lane.links %}
-                  <a href="{{ link.destination_href or link.href }}" class="admin-guide-link-row">
-                    <span class="admin-guide-link-label">{{ link.label }}</span>
-                    <span class="admin-guide-link-meta">{{ link.meta }}</span>
-                  </a>
-                {% endfor %}
+        <div class="admin-domain-grid">
+          {% for domain in learning_contributions.domains %}
+            <section class="admin-domain-card">
+              <div class="card-label">{{ domain.eyebrow }}</div>
+              <div class="admin-domain-ring" style="--progress: {{ domain.share_percent }}%;">
+                <div class="admin-domain-ring-inner">
+                  <span class="admin-domain-ring-value">{{ domain.share_display }}</span>
+                  <span class="admin-domain-ring-label">of model learning</span>
+                </div>
               </div>
+              <div class="admin-domain-title">{{ domain.title }}</div>
+              <div class="admin-domain-helper">{{ domain.helper }}</div>
+              <div class="admin-domain-meta">{{ domain.asset_label }}</div>
             </section>
           {% endfor %}
         </div>

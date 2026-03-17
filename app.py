@@ -972,6 +972,74 @@ def _build_admin_training_guide(cur):
     ]
 
 
+def _build_admin_learning_contributions(cur):
+    cur.execute("SELECT COUNT(*) AS total FROM scenario_templates WHERE specialty = ?", (ACTIVE_CURRICULUM_SPECIALTY,))
+    scenario_total = cur.fetchone()["total"] or 0
+
+    cur.execute("SELECT COUNT(*) AS total FROM procedure_samples")
+    sample_total = cur.fetchone()["total"] or 0
+
+    cur.execute(
+        """
+        SELECT source_kind, COUNT(*) AS total
+        FROM training_examples
+        WHERE status IN ('approved', 'gold')
+        GROUP BY source_kind
+        """
+    )
+    source_counts = {row["source_kind"]: row["total"] for row in cur.fetchall()}
+
+    rescue_examples = source_counts.get("admin-review", 0) + source_counts.get("manual", 0)
+    expert_gold_examples = source_counts.get("expert_request_gold", 0)
+    scenario_examples = (
+        source_counts.get("trainer_review", 0)
+        + source_counts.get("scenario_review", 0)
+        + source_counts.get("expert_request_scenario", 0)
+    )
+
+    domains = [
+        {
+            "eyebrow": "Path 1",
+            "title": "Low-rated note rescue",
+            "helper": "Rescued live failures pushed back into the learning set.",
+            "asset_count": rescue_examples,
+            "asset_label": f"{rescue_examples} rescued examples",
+        },
+        {
+            "eyebrow": "Path 2",
+            "title": "Expert gold standards",
+            "helper": "Curated gold notes and reference canon guiding output quality.",
+            "asset_count": expert_gold_examples + sample_total,
+            "asset_label": f"{expert_gold_examples + sample_total} curated assets",
+        },
+        {
+            "eyebrow": "Path 3",
+            "title": "Model-generated scenarios",
+            "helper": "Scenario queue plus scenario-derived teaching examples in rotation.",
+            "asset_count": scenario_total + scenario_examples,
+            "asset_label": f"{scenario_total + scenario_examples} scenario inputs",
+        },
+    ]
+
+    total_assets = sum(domain["asset_count"] for domain in domains)
+    if total_assets <= 0:
+        total_assets = 0
+
+    for domain in domains:
+        share_percent = round((domain["asset_count"] / total_assets) * 100) if total_assets else 0
+        domain["share_percent"] = share_percent
+        domain["share_display"] = f"{share_percent}%"
+
+    dominant_domain = max(domains, key=lambda row: row["asset_count"], default=None)
+    return {
+        "domains": domains,
+        "total_assets": total_assets,
+        "total_assets_display": f"{total_assets} active learning inputs",
+        "dominant_title": dominant_domain["title"] if dominant_domain else "No domain data yet",
+        "dominant_share_display": dominant_domain["share_display"] if dominant_domain else "0%",
+    }
+
+
 def _fetch_admin_recent_feedback(cur, low_only=False, search="", note_type=""):
     query = """
         SELECT f.id, f.shorthand, f.procedure, f.rating, f.comment, f.generated_note, f.note_type,
@@ -2208,7 +2276,7 @@ def admin():
     cur = conn.cursor()
 
     rating_trend = _build_admin_rating_trend(cur, days=14)
-    training_guide = _build_admin_training_guide(cur)
+    learning_contributions = _build_admin_learning_contributions(cur)
     cur.execute(
         """
         SELECT COUNT(*) AS note_count,
@@ -2229,7 +2297,7 @@ def admin():
     return render_template(
         "admin_dashboard.html",
         rating_trend=rating_trend,
-        training_guide=training_guide,
+        learning_contributions=learning_contributions,
         health_summary={
             "note_count": feedback_summary["note_count"] or 0,
             "average_score": feedback_summary["average_score"] or 0,
