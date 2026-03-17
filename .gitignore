@@ -1,4 +1,5 @@
 surginote.db
+.tools/
 .env
 __pycache__/
 .venv
