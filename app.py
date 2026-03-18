@@ -1,3 +1,4 @@
+import hashlib
 import json
 import os
 import re
@@ -96,8 +97,17 @@ NOTE_TYPE_CHOICES = [
     {"value": "clinic_note", "label": "Clinic Note", "detail": "Office visits and follow-up notes"},
     {"value": "op_note", "label": "Op Note", "detail": "Operative reports and procedures"},
 ]
+DEFAULT_MODEL_NAME = "gpt-5-mini"
+DEFAULT_MODEL_TEMPERATURE = 0.0
+DEFAULT_MODEL_MAX_OUTPUT_TOKENS = 900
+MODEL_CALL_LIMIT_PER_HOUR = 60
+DAILY_COST_ALERT_CACHE = set()
 
 init_db()
+
+
+class GenerationLimitError(Exception):
+    pass
 
 
 def _migrate_feedback_scores():
@@ -184,6 +194,394 @@ def normalize_phone(phone: str) -> str:
         return f"+{digits}"
 
     return ""
+
+
+def _format_phone_display(phone: str) -> str:
+    normalized = normalize_phone(phone or "")
+    if not normalized:
+        return ""
+
+    digits = re.sub(r"\D", "", normalized)
+    if len(digits) == 11 and digits.startswith("1"):
+        digits = digits[1:]
+    if len(digits) == 10:
+        return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+    return normalized
+
+
+def _single_line_preview(text: str, limit: int = 150) -> str:
+    compact = re.sub(r"\s+", " ", str(text or "")).strip()
+    if len(compact) <= limit:
+        return compact
+    shortened = compact[: limit - 1].rsplit(" ", 1)[0].strip()
+    return f"{shortened or compact[: limit - 1]}…"
+
+
+def _hash_prompt(prompt: str) -> str:
+    return hashlib.sha256(str(prompt or "").encode("utf-8")).hexdigest()
+
+
+def _user_recent_generation_count(user_id, minutes=60):
+    if not user_id:
+        return 0
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT COUNT(*) AS total
+        FROM model_usage
+        WHERE user_id = ?
+          AND created_at >= datetime('now', ?)
+        """,
+        (user_id, f"-{int(minutes)} minutes"),
+    )
+    total = cur.fetchone()["total"] or 0
+    conn.close()
+    return total
+
+
+def _case_primary_diagnosis(case_facts):
+    case_facts = case_facts or {}
+    normalized = str(case_facts.get("normalized_input") or "").lower()
+    imaging = case_facts.get("clinical_context", {}).get("imaging") or []
+
+    imaging_map = {
+        "ct_appendicitis": "appendicitis",
+        "ct_sbo": "small bowel obstruction",
+        "ultrasound_gallstones": "cholelithiasis",
+        "ct_cholecystitis": "acute cholecystitis",
+    }
+    for item in imaging:
+        if item in imaging_map:
+            return imaging_map[item]
+
+    keyword_map = [
+        ("appendicitis", "appendicitis"),
+        ("appy", "appendicitis"),
+        ("small bowel obstruction", "small bowel obstruction"),
+        ("sbo", "small bowel obstruction"),
+        ("cholecystitis", "acute cholecystitis"),
+        ("gallstones", "cholelithiasis"),
+        ("symptomatic cholelithiasis", "cholelithiasis"),
+        ("hernia", "hernia"),
+    ]
+    for needle, label in keyword_map:
+        if needle in normalized:
+            return label
+    return ""
+
+
+def _build_asserted_facts(case_facts):
+    operative_details = (case_facts or {}).get("operative_details") or {}
+    assumptions = (case_facts or {}).get("assumptions") or {}
+    return {
+        "procedure": (case_facts or {}).get("procedure") or "",
+        "diagnosis": _case_primary_diagnosis(case_facts),
+        "laterality": operative_details.get("laterality") or "",
+        "estimated_blood_loss": operative_details.get("estimated_blood_loss") or assumptions.get("ebl") or "",
+        "specimen": operative_details.get("specimen") or assumptions.get("specimen") or "",
+        "implants": operative_details.get("implants") or ("mesh" if assumptions.get("mesh_used") else ""),
+        "cpt_codes": operative_details.get("cpt_codes") or [],
+    }
+
+
+def _normalize_assertion_value(value):
+    if isinstance(value, list):
+        return [_normalize_assertion_value(item) for item in value]
+    return re.sub(r"\s+", " ", str(value or "")).strip().lower()
+
+
+def _extract_asserted_facts_block(text):
+    raw_text = str(text or "")
+    match = re.search(
+        r"---ASSERTED_FACTS---\s*(\{.*?\})\s*---END_ASSERTED_FACTS---",
+        raw_text,
+        flags=re.DOTALL,
+    )
+    asserted = {}
+    cleaned = raw_text
+    if match:
+        block = match.group(1).strip()
+        try:
+            parsed = json.loads(block)
+            if isinstance(parsed, dict):
+                asserted = parsed
+        except json.JSONDecodeError:
+            asserted = {}
+        cleaned = (raw_text[:match.start()] + raw_text[match.end():]).strip()
+    return cleaned, asserted
+
+
+def _append_editor_note(existing_notes, note_line):
+    existing = str(existing_notes or "").strip()
+    note_line = str(note_line or "").strip()
+    if not note_line:
+        return existing
+    if not existing:
+        return note_line
+    return f"{existing}\n{note_line}"
+
+
+def _response_usage_dict(response):
+    usage = getattr(response, "usage", None)
+    if usage is None and hasattr(response, "model_dump"):
+        response_dump = response.model_dump()
+        usage = response_dump.get("usage") or response_dump.get("meta", {}).get("usage")
+
+    if usage is None:
+        return {}
+    if isinstance(usage, dict):
+        return usage
+    if hasattr(usage, "model_dump"):
+        return usage.model_dump()
+
+    usage_dict = {}
+    for key in ("total_tokens", "input_tokens", "output_tokens", "prompt_tokens", "completion_tokens", "cost_usd"):
+        value = getattr(usage, key, None)
+        if value is not None:
+            usage_dict[key] = value
+    return usage_dict
+
+
+def _response_output_text(response):
+    text = getattr(response, "output_text", None)
+    if text:
+        return text
+
+    if hasattr(response, "output") and response.output:
+        chunks = []
+        for item in response.output:
+            for content in getattr(item, "content", []) or []:
+                piece = getattr(content, "text", None)
+                if piece:
+                    chunks.append(piece)
+        if chunks:
+            return "".join(chunks)
+
+    if hasattr(response, "model_dump"):
+        response_dump = response.model_dump()
+        chunks = []
+        for item in response_dump.get("output", []) or []:
+            for content in item.get("content", []) or []:
+                piece = content.get("text")
+                if piece:
+                    chunks.append(piece)
+        if chunks:
+            return "".join(chunks)
+
+    return ""
+
+
+def daily_cost_alert(threshold_usd=50.0):
+    admin_alert_email = os.getenv("ADMIN_ALERT_EMAIL")
+    if not admin_alert_email:
+        return False
+
+    today_key = datetime.now().strftime("%Y-%m-%d")
+    if today_key in DAILY_COST_ALERT_CACHE:
+        return False
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        SELECT ROUND(COALESCE(SUM(cost_usd), 0), 4) AS total_cost
+        FROM model_usage
+        WHERE date(created_at, 'localtime') = date('now', 'localtime')
+        """
+    )
+    total_cost = float(cur.fetchone()["total_cost"] or 0.0)
+    conn.close()
+
+    if total_cost < float(threshold_usd):
+        return False
+
+    subject = f"SurgiNote daily model cost alert: ${total_cost:.2f}"
+    body = (
+        f"Today's logged model usage has reached ${total_cost:.2f}, "
+        f"which is above the alert threshold of ${float(threshold_usd):.2f}."
+    )
+    sent = _send_email_message(admin_alert_email, subject, body)
+    if sent:
+        DAILY_COST_ALERT_CACHE.add(today_key)
+    return sent
+
+
+def call_model_and_log(
+    prompt,
+    user_id=None,
+    training_example_id=None,
+    model=DEFAULT_MODEL_NAME,
+    temperature=DEFAULT_MODEL_TEMPERATURE,
+    max_output_tokens=DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+):
+    if user_id and _user_recent_generation_count(user_id, minutes=60) >= MODEL_CALL_LIMIT_PER_HOUR:
+        raise GenerationLimitError("Hourly generation limit reached. Please try again shortly.")
+
+    response = client.responses.create(
+        model=model,
+        input=prompt,
+        temperature=temperature,
+        max_output_tokens=max_output_tokens,
+    )
+    text_output = (_response_output_text(response) or "").strip()
+    usage_dict = _response_usage_dict(response)
+    tokens_used = usage_dict.get("total_tokens")
+    if tokens_used is None:
+        input_tokens = usage_dict.get("input_tokens") or usage_dict.get("prompt_tokens") or 0
+        output_tokens = usage_dict.get("output_tokens") or usage_dict.get("completion_tokens") or 0
+        tokens_used = input_tokens + output_tokens or None
+    cost_usd = usage_dict.get("cost_usd")
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO model_usage (
+            training_example_id, user_id, model, prompt_hash, tokens_used, cost_usd, response_preview
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            training_example_id,
+            user_id,
+            model,
+            _hash_prompt(prompt),
+            tokens_used,
+            cost_usd,
+            _single_line_preview(text_output, limit=240),
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    daily_cost_alert()
+    return text_output, usage_dict
+
+
+def two_stage_generate(
+    shorthand,
+    user_id=None,
+    note_type="op_note",
+    template_profile=None,
+    training_example_id=None,
+    specialty=DEFAULT_SPECIALTY,
+    template_content=None,
+    retrieved_examples=None,
+    case_facts=None,
+):
+    facts = case_facts or build_case_facts(shorthand)
+    primary_diagnosis = _case_primary_diagnosis(facts)
+    if not facts.get("procedure") and not primary_diagnosis:
+        raise ValueError("Procedure or diagnosis must be identifiable before generation.")
+
+    effective_template = template_content
+    if effective_template is None and template_profile and template_profile.get("strict_enabled"):
+        effective_template = (template_profile.get("strict_template_text") or "").strip() or None
+
+    prompt = build_prompt(
+        case_facts=facts,
+        note_type=note_type,
+        template_content=effective_template,
+        specialty=specialty,
+        retrieved_examples=retrieved_examples,
+        template_profile=template_profile,
+    )
+    asserted_facts = _build_asserted_facts(facts)
+    prompt = (
+        f"{prompt}\n\n---ASSERTED_FACTS---\n"
+        f"{json.dumps(asserted_facts, ensure_ascii=True)}\n"
+        f"---END_ASSERTED_FACTS---"
+    )
+
+    draft_with_assertions, usage = call_model_and_log(
+        prompt,
+        user_id=user_id,
+        training_example_id=training_example_id,
+        model=DEFAULT_MODEL_NAME,
+        temperature=0.0,
+        max_output_tokens=DEFAULT_MODEL_MAX_OUTPUT_TOKENS,
+    )
+    draft_text, asserted_from_model = _extract_asserted_facts_block(draft_with_assertions)
+
+    expected_procedure = _normalize_assertion_value(facts.get("procedure"))
+    asserted_procedure = _normalize_assertion_value(asserted_from_model.get("procedure"))
+    procedure_match = not expected_procedure or not asserted_procedure or expected_procedure == asserted_procedure
+
+    validation = {
+        "procedure_match": procedure_match,
+        "expected_procedure": facts.get("procedure") or "",
+        "asserted_procedure": asserted_from_model.get("procedure") or "",
+        "primary_diagnosis": primary_diagnosis,
+    }
+
+    if training_example_id and not procedure_match:
+        note_line = (
+            f"Procedure assertion mismatch detected at {datetime.now(timezone.utc).isoformat()}: "
+            f"expected {facts.get('procedure') or '[missing]'} but model asserted "
+            f"{asserted_from_model.get('procedure') or '[missing]'}."
+        )
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT editor_notes FROM training_examples WHERE id = ?", (training_example_id,))
+        row = cur.fetchone()
+        existing_notes = row["editor_notes"] if row else ""
+        cur.execute(
+            """
+            UPDATE training_examples
+            SET status = 'needs_review',
+                editor_notes = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                _append_editor_note(existing_notes, note_line),
+                training_example_id,
+            ),
+        )
+        conn.commit()
+        conn.close()
+
+    return draft_text, {
+        "usage": usage,
+        "asserted_from_model": asserted_from_model,
+        "validation": validation,
+        "prompt_hash": _hash_prompt(prompt),
+        "case_facts": facts,
+    }
+
+
+def _deidentify_phi_text(text: str):
+    sanitized = str(text or "").strip()
+    replacement_count = 0
+
+    patterns = [
+        (r"(?im)\b(patient name|pt name|name)\s*:\s*[^\n]+", lambda m: f"{m.group(1)}: [PATIENT NAME]"),
+        (r"(?im)\b(address)\s*:\s*[^\n]+", lambda m: f"{m.group(1)}: [ADDRESS]"),
+        (r"(?im)\b(?:dob|date of birth)\s*:\s*[^\n]+", lambda m: "DOB: [DATE]"),
+        (r"(?im)\b(?:mrn|medical record number|account|acct|csn|fin)\s*[:#]?\s*[A-Z0-9\-]+\b", "[ID]"),
+        (r"\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b", "[EMAIL]"),
+        (r"(?:\+?1[\s.\-]?)?(?:\(?\d{3}\)?[\s.\-]?\d{3}[\s.\-]?\d{4})", "[PHONE]"),
+        (r"\b\d{3}-\d{2}-\d{4}\b", "[SSN]"),
+        (r"\b(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{4}[/-]\d{1,2}[/-]\d{1,2})\b", "[DATE]"),
+        (r"\b(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{2,4}\b", "[DATE]"),
+    ]
+
+    for pattern, replacement in patterns:
+        sanitized, count = re.subn(pattern, replacement, sanitized, flags=re.IGNORECASE)
+        replacement_count += count
+
+    sanitized = re.sub(r"\n{3,}", "\n\n", sanitized).strip()
+    return sanitized, replacement_count
+
+
+def _canonical_note_title(note_text: str, fallback_note_type: str):
+    for line in str(note_text or "").splitlines():
+        clean = re.sub(r"\s+", " ", line).strip(" -:\t")
+        if len(clean) >= 8:
+            return clean[:100]
+    return f"Canonical {fallback_note_type.replace('_', ' ').title()}"
 
 
 def _note_type_label(note_type):
@@ -362,6 +760,7 @@ def _expert_user_rows():
     conn.close()
     for row in rows:
         row["display_name"] = _user_display_with_title(row)
+        row["phone_display"] = _format_phone_display(row.get("phone"))
     return rows
 
 
@@ -404,13 +803,37 @@ def _pending_expert_request_count(user_id):
     return count
 
 
+def _scenario_batch_date():
+    return datetime.now().strftime("%Y-%m-%d")
+
+
+def _daily_urgent_scenarios(cur, batch_date=None, limit=5):
+    target_batch_date = batch_date or _scenario_batch_date()
+    cur.execute(
+        """
+        SELECT id, specialty, note_type, title, module_key, module_label, module_rank, diagnosis, procedure_focus,
+               complexity_level, scenario_status, scenario_brief, learning_objectives, model_confidence, review_count,
+               approved_count, gold_count, average_edit_similarity, next_target_level, user_feedback_score,
+               user_feedback_count, curriculum_pressure, updated_at, batch_date, urgency_rank, question_prompt, why_now
+        FROM scenario_templates
+        WHERE specialty = ?
+          AND generated_by = 'daily-urgent-scenario-generator'
+          AND batch_date = ?
+        ORDER BY COALESCE(urgency_rank, 999) ASC, curriculum_pressure DESC, updated_at DESC
+        LIMIT ?
+        """,
+        (ACTIVE_CURRICULUM_SPECIALTY, target_batch_date, limit),
+    )
+    return [_prepare_scenario_for_display(row) for row in cur.fetchall()]
+
+
 def _top_urgent_scenarios(cur, limit=5):
     cur.execute(
         """
         SELECT id, specialty, note_type, title, module_key, module_label, module_rank, diagnosis, procedure_focus,
                complexity_level, scenario_status, scenario_brief, learning_objectives, model_confidence, review_count,
                approved_count, gold_count, average_edit_similarity, next_target_level, user_feedback_score,
-               user_feedback_count, curriculum_pressure, updated_at
+               user_feedback_count, curriculum_pressure, updated_at, batch_date, urgency_rank, question_prompt, why_now
         FROM scenario_templates
         WHERE specialty = ?
         ORDER BY curriculum_pressure DESC, COALESCE(user_feedback_score, 0) ASC, model_confidence ASC,
@@ -494,12 +917,16 @@ def _urgent_scenario_generation_targets(cur, limit=5):
             target_level = 2
         else:
             target_level = 3
+        confidence_gap = max(0.0, 10.0 - avg_score)
         ranked_modules.append({
             "module_key": module_key,
             "module_label": module["label"],
             "note_type": module["note_type"],
             "target_level": target_level,
-            "focus": f"Prioritize the documentation failure patterns hurting live scores in {module['label']}.",
+            "focus": f"Prioritize the documentation failure patterns hurting live scores in {module['label']}. Ask for the exact shorthand, case facts, and final note structure the model still keeps missing.",
+            "why_now": f"{module['label']} is averaging {avg_score:.1f}/10 across {feedback_count} rated notes, leaving a {confidence_gap:.1f}-point documentation gap to close.",
+            "feedback_count": feedback_count,
+            "average_score": avg_score,
         })
         seen_modules.add(module_key)
         if len(ranked_modules) >= limit:
@@ -513,7 +940,10 @@ def _urgent_scenario_generation_targets(cur, limit=5):
             "module_label": module["label"],
             "note_type": module["note_type"],
             "target_level": 2,
-            "focus": f"Generate a high-yield case that would improve confidence in {module['label']}.",
+            "focus": f"Generate a high-yield case that would improve confidence in {module['label']}. Ask for the specific shorthand and note style details the system should learn next.",
+            "why_now": f"{module['label']} still needs more directed examples so the model can stabilize its output style in that domain.",
+            "feedback_count": 0,
+            "average_score": None,
         })
         if len(ranked_modules) >= limit:
             break
@@ -750,6 +1180,9 @@ def _source_kind_label(source_kind):
         "admin-review": "Admin review",
         "scenario_review": "Scenario review",
         "trainer_review": "Trainer submissions",
+        "canonical_note": "Master note canon",
+        "expert_request_gold": "Expert curated example",
+        "expert_request_scenario": "Expert scenario response",
     }
     return mapping.get((source_kind or "").strip(), "Other")
 
@@ -831,12 +1264,13 @@ def _build_admin_rating_trend(cur, days=14):
             "average_score_display": _format_score(avg_score),
         })
     values = [point["average_score"] for point in points]
+    latest_scored_point = next((point for point in reversed(points) if (point["note_count"] or 0) > 0), None)
     return {
         "points": points,
         "line_path": _build_svg_line_path(values),
         "area_path": _build_svg_area_path(values),
-        "latest_score": points[-1]["average_score"] if points else 0,
-        "latest_score_display": _format_score(points[-1]["average_score"] if points else 0),
+        "latest_score": latest_scored_point["average_score"] if latest_scored_point else 0,
+        "latest_score_display": _format_score(latest_scored_point["average_score"] if latest_scored_point else 0),
     }
 
 
@@ -895,7 +1329,9 @@ def _build_admin_training_guide(cur):
     source_counts = {row["source_kind"]: row["total"] for row in cur.fetchall()}
     approved_examples = sum(source_counts.values())
     rescue_examples = source_counts.get("admin-review", 0) + source_counts.get("manual", 0)
-    expert_examples = source_counts.get("trainer_review", 0) + source_counts.get("scenario_review", 0)
+    cur.execute("SELECT COUNT(*) AS total FROM training_examples WHERE COALESCE(in_master_canon, 0) = 1")
+    canonical_examples = cur.fetchone()["total"] or 0
+    expert_examples = canonical_examples + source_counts.get("expert_request_gold", 0) + source_counts.get("trainer_review", 0) + source_counts.get("scenario_review", 0)
 
     return [
         {
@@ -905,12 +1341,6 @@ def _build_admin_training_guide(cur):
             "eyebrow": "Path 1",
             "links": [
                 {
-                    "label": "Open trainer",
-                    "href": "/admin/trainer?path=1&view=trainer",
-                    "meta": "Rescue low-rated live notes",
-                    "view": "trainer",
-                },
-                {
                     "label": "Review live notes",
                     "href": "/admin/trainer?path=1&view=live_notes",
                     "meta": "Find weak outputs from production",
@@ -919,22 +1349,22 @@ def _build_admin_training_guide(cur):
             ],
         },
         {
-            "title": "Expert-curated gold standards",
-            "helper": "Maintain the canonical library of surgeon-edited notes and reviewer-approved examples the system can retrieve and learn from.",
+            "title": "Expert curated examples",
+            "helper": "Master note canon entries anchor the system’s best output style, consistency, and retrieval quality.",
             "meta": f"{expert_examples} expert-reviewed examples",
             "eyebrow": "Path 2",
             "links": [
                 {
-                    "label": "Training library",
+                    "label": "Master note canon",
                     "href": "/admin/trainer?path=2&view=training_library",
-                    "meta": f"{approved_examples} approved shorthand-to-gold pairs",
+                    "meta": f"{canonical_examples} canon notes influencing the model",
                     "view": "training_library",
                     "destination_href": "/admin/training-library",
                 },
                 {
-                    "label": "Sample library",
+                    "label": "Gold-standard examples",
                     "href": "/admin/trainer?path=2&view=sample_library",
-                    "meta": "Reference notes and canonical examples",
+                    "meta": "Reference examples and canonical teaching assets",
                     "view": "sample_library",
                     "destination_href": "/admin/sample-library",
                 },
@@ -949,14 +1379,14 @@ def _build_admin_training_guide(cur):
         },
         {
             "title": "Model-generated scenario learning",
-            "helper": "Continuously refresh the most urgent model-generated learning scenarios from weak live-score patterns so the system trains exactly where confidence is slipping.",
+            "helper": "Every day the model should surface the five highest-value questions it still needs answered, then learn from the corrected responses.",
             "meta": f"{scenario_total} model-generated scenarios in rotation",
             "eyebrow": "Path 3",
             "links": [
                 {
-                    "label": "Urgent scenarios",
+                    "label": "Daily urgent 5",
                     "href": "/admin/trainer?path=3&view=urgent_scenarios",
-                    "meta": "Fresh queue of the next five confidence-building scenarios",
+                    "meta": "Five new model-directed questions each day",
                     "view": "urgent_scenarios",
                     "destination_href": "/admin/scenarios",
                 },
@@ -989,6 +1419,8 @@ def _build_admin_learning_contributions(cur):
     )
     source_counts = {row["source_kind"]: row["total"] for row in cur.fetchall()}
 
+    cur.execute("SELECT COUNT(*) AS total FROM training_examples WHERE COALESCE(in_master_canon, 0) = 1")
+    master_canon_total = cur.fetchone()["total"] or 0
     rescue_examples = source_counts.get("admin-review", 0) + source_counts.get("manual", 0)
     expert_gold_examples = source_counts.get("expert_request_gold", 0)
     scenario_examples = (
@@ -1007,10 +1439,10 @@ def _build_admin_learning_contributions(cur):
         },
         {
             "eyebrow": "Path 2",
-            "title": "Expert gold standards",
-            "helper": "Curated gold notes and reference canon guiding output quality.",
-            "asset_count": expert_gold_examples + sample_total,
-            "asset_label": f"{expert_gold_examples + sample_total} curated assets",
+            "title": "Expert curated examples",
+            "helper": "Master note canon entries and gold-standard references guiding consistent output quality.",
+            "asset_count": expert_gold_examples + sample_total + master_canon_total,
+            "asset_label": f"{expert_gold_examples + sample_total + master_canon_total} curated assets",
         },
         {
             "eyebrow": "Path 3",
@@ -1457,7 +1889,7 @@ def _build_expert_request_sections(scenario_brief, request_brief):
     for source_label, display_label in preferred_labels:
         content = next((text for label, text in blocks if label.lower() == source_label.lower()), "")
         if content:
-            sections.append({"label": display_label, "content": content})
+            sections.append({"label": display_label, "content": re.sub(r"\s+", " ", content).strip()})
 
     if sections:
         return sections
@@ -1465,7 +1897,7 @@ def _build_expert_request_sections(scenario_brief, request_brief):
     fallback = (scenario_brief or request_brief or "").strip()
     if not fallback:
         return []
-    return [{"label": "Scenario brief", "content": fallback}]
+    return [{"label": "Scenario brief", "content": re.sub(r"\s+", " ", fallback).strip()}]
 
 
 def _documentation_focus(note_type):
@@ -1488,6 +1920,9 @@ def _prepare_scenario_for_display(row):
         scenario.get("note_type"),
     )
     scenario["display_focus"] = _documentation_focus(scenario.get("note_type"))
+    scenario["question_prompt"] = (scenario.get("question_prompt") or "").strip() or f"What should SurgiNote learn from this {scenario.get('note_type', 'note').replace('_', ' ')} case so the next draft sounds exactly right?"
+    scenario["why_now"] = (scenario.get("why_now") or "").strip() or "This scenario targets a current uncertainty in the model's note-writing confidence."
+    scenario["urgency_rank"] = scenario.get("urgency_rank") or None
     return scenario
 
 
@@ -1698,9 +2133,9 @@ def _insert_scenario_template(cur, scenario):
         INSERT INTO scenario_templates (
             specialty, note_type, title, module_key, module_label, module_rank, diagnosis, procedure_focus, complexity_level,
             scenario_status, scenario_brief, learning_objectives, structured_facts_json,
-            generated_by
+            generated_by, batch_date, urgency_rank, question_prompt, why_now
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'available', ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'available', ?, ?, ?, ?, ?, ?, ?, ?)
         """,
         (
             scenario["specialty"],
@@ -1716,8 +2151,119 @@ def _insert_scenario_template(cur, scenario):
             scenario.get("learning_objectives"),
             json.dumps(scenario, ensure_ascii=True),
             scenario.get("generated_by", "seed-catalog"),
+            scenario.get("batch_date"),
+            scenario.get("urgency_rank", 0),
+            scenario.get("question_prompt"),
+            scenario.get("why_now"),
         )
     )
+
+
+def _generate_daily_urgent_scenarios(conn, cur, limit=5, force=False):
+    specialty = ACTIVE_CURRICULUM_SPECIALTY
+    batch_date = _scenario_batch_date()
+    existing = _daily_urgent_scenarios(cur, batch_date=batch_date, limit=limit)
+    if existing and not force and len(existing) >= limit:
+        return {"rows": existing, "created": 0, "batch_date": batch_date, "error": None}
+
+    if not os.getenv("OPENAI_API_KEY"):
+        return {
+            "rows": existing,
+            "created": 0,
+            "batch_date": batch_date,
+            "error": None if existing else "Missing OPENAI_API_KEY environment variable.",
+        }
+
+    created = 0
+    existing_titles = _existing_scenario_titles(cur, specialty=specialty)
+    existing_title_pool = {title.lower().strip() for title in existing_titles}
+    targets = _urgent_scenario_generation_targets(cur, limit=limit)
+    slots_remaining = max(0, limit - len(existing))
+
+    try:
+        for target in targets:
+            if slots_remaining <= 0:
+                break
+            module = GENERAL_SURGERY_MODULE_MAP.get(target["module_key"])
+            if not module:
+                continue
+
+            prompt = build_scenario_generation_prompt(
+                specialty=specialty,
+                note_type=target["note_type"],
+                module_label=module["label"],
+                module_description=module["description"],
+                target_level=target["target_level"],
+                count=1,
+                focus=target["focus"],
+                existing_titles=existing_titles,
+            )
+            scenario_text, _ = call_model_and_log(
+                prompt,
+                model=DEFAULT_MODEL_NAME,
+                temperature=0.0,
+                max_output_tokens=1400,
+            )
+            scenario_batch = _parse_json_array_output(scenario_text)
+            if not scenario_batch:
+                continue
+
+            item = scenario_batch[0]
+            title = (item.get("title") or "").strip()
+            scenario_brief = (item.get("scenario_brief") or "").strip()
+            question_prompt = (item.get("question_prompt") or "").strip()
+            why_now = (item.get("why_now") or "").strip() or target.get("why_now") or ""
+            if not title or not scenario_brief:
+                continue
+
+            base_title = title
+            suffix = 2
+            while title.lower() in existing_title_pool:
+                title = f"{base_title} ({suffix})"
+                suffix += 1
+            existing_titles.append(title)
+            existing_title_pool.add(title.lower())
+
+            _insert_scenario_template(cur, {
+                "specialty": specialty,
+                "note_type": target["note_type"],
+                "module_key": target["module_key"],
+                "module_label": module["label"],
+                "module_rank": module["rank"],
+                "title": title,
+                "diagnosis": (item.get("diagnosis") or "").strip() or None,
+                "procedure_focus": (item.get("procedure_focus") or "").strip() or None,
+                "complexity_level": max(1, min(int(item.get("complexity_level") or target["target_level"]), 3)),
+                "scenario_brief": scenario_brief,
+                "learning_objectives": (item.get("learning_objectives") or "").strip() or None,
+                "generated_by": "daily-urgent-scenario-generator",
+                "focus": target["focus"],
+                "batch_date": batch_date,
+                "urgency_rank": len(existing) + created + 1,
+                "question_prompt": question_prompt or f"What exact shorthand and final {_note_type_label(target['note_type']).lower()} would you want for this case so SurgiNote gets {module['label']} right next time?",
+                "why_now": why_now,
+            })
+            created += 1
+            slots_remaining -= 1
+
+        conn.commit()
+    except RateLimitError:
+        return {
+            "rows": existing,
+            "created": created,
+            "batch_date": batch_date,
+            "error": "AI scenario generation is temporarily unavailable.",
+        }
+    except Exception as exc:
+        return {
+            "rows": existing,
+            "created": created,
+            "batch_date": batch_date,
+            "error": f"Unable to refresh urgent scenarios: {str(exc)}",
+        }
+
+    rows = _daily_urgent_scenarios(cur, batch_date=batch_date, limit=limit)
+    return {"rows": rows, "created": created, "batch_date": batch_date, "error": None}
 
 
 def _fetch_runtime_examples(specialty, note_type, shorthand, case_facts, limit=RUNTIME_RETRIEVAL_LIMIT):
@@ -2289,6 +2835,9 @@ def admin():
     cur.execute("SELECT COUNT(*) AS total FROM training_examples WHERE status IN ('approved', 'gold')")
     approved_training_examples = cur.fetchone()["total"] or 0
 
+    cur.execute("SELECT COUNT(*) AS total FROM training_examples WHERE COALESCE(in_master_canon, 0) = 1")
+    master_canon_notes = cur.fetchone()["total"] or 0
+
     cur.execute("SELECT COUNT(*) AS total FROM expert_requests WHERE status = 'pending'")
     pending_submissions = cur.fetchone()["total"] or 0
 
@@ -2303,6 +2852,7 @@ def admin():
             "average_score": feedback_summary["average_score"] or 0,
             "average_score_display": _format_score(feedback_summary["average_score"] or 0),
             "approved_training_examples": approved_training_examples,
+            "master_canon_notes": master_canon_notes,
             "pending_submissions": pending_submissions,
         },
     )
@@ -2368,16 +2918,26 @@ def admin_trainer():
     if selected_path not in {"1", "2", "3"}:
         selected_path = "1"
     default_views = {
-        "1": "trainer",
+        "1": "live_notes",
         "2": "training_library",
         "3": "urgent_scenarios",
     }
     if not selected_training_view:
         selected_training_view = default_views[selected_path]
+    if selected_path == "1" and selected_training_view == "trainer":
+        selected_training_view = "live_notes"
     if feedback_id and str(feedback_id).isdigit():
         prefill_feedback = _fetch_feedback_prefill(int(feedback_id))
     conn = get_conn()
     cur = conn.cursor()
+    daily_scenario_result = None
+    if selected_path == "3" and selected_training_view == "urgent_scenarios":
+        ensure_default_scenarios(specialty_filter=ACTIVE_CURRICULUM_SPECIALTY)
+        daily_scenario_result = _generate_daily_urgent_scenarios(conn, cur, limit=5)
+        if not error and daily_scenario_result.get("error"):
+            error = daily_scenario_result["error"]
+        if not created and daily_scenario_result.get("created"):
+            created = f"Generated {daily_scenario_result['created']} fresh system-directed scenarios for today."
     training_guide = _build_admin_training_guide(cur)
     recent_feedback = _fetch_admin_recent_feedback(
         cur,
@@ -2385,9 +2945,41 @@ def admin_trainer():
         search=(request.args.get("q") or "").strip(),
         note_type=(request.args.get("note_type") or "").strip(),
     ) if selected_path == "1" and selected_training_view == "live_notes" else []
+    canonical_notes = []
+    gold_examples = []
     expert_users = _expert_user_rows() if selected_path == "3" and selected_training_view == "trainer_roster" else []
-    urgent_scenarios = _top_urgent_scenarios(cur, limit=5) if selected_path == "3" and selected_training_view == "trainer_roster" else []
+    urgent_scenarios = daily_scenario_result["rows"] if daily_scenario_result else []
     expert_requests = []
+    if selected_path == "2" and selected_training_view == "training_library":
+        cur.execute(
+            """
+            SELECT id, title, note_type, module_label, corrected_output, created_at, status, editor_notes, source_kind, in_master_canon
+            FROM training_examples
+            WHERE COALESCE(in_master_canon, 0) = 1
+               OR status IN ('approved', 'gold')
+            ORDER BY COALESCE(in_master_canon, 0) DESC, updated_at DESC, created_at DESC
+            LIMIT 25
+            """
+        )
+        for row in cur.fetchall():
+            item = dict(row)
+            item["note_preview"] = _single_line_preview(item.get("corrected_output"), limit=180)
+            item["source_label"] = _source_kind_label(item.get("source_kind"))
+            canonical_notes.append(item)
+    if selected_path == "2" and selected_training_view == "sample_library":
+        cur.execute(
+            """
+            SELECT id, procedure, title, tags, ideal_note, created_at
+            FROM procedure_samples
+            ORDER BY created_at DESC
+            LIMIT 25
+            """
+        )
+        for row in cur.fetchall():
+            item = dict(row)
+            item["example_title"] = item.get("title") or item.get("procedure") or "Untitled example"
+            item["example_preview"] = _single_line_preview(item.get("ideal_note"), limit=180)
+            gold_examples.append(item)
     if selected_path == "3" and selected_training_view == "trainer_roster":
         cur.execute(
             """
@@ -2407,6 +2999,8 @@ def admin_trainer():
                 "last_name": item.get("expert_last_name"),
                 "credential_title": item.get("expert_credential_title"),
             })
+            item["expert_phone_display"] = _format_phone_display(item.get("expert_phone"))
+            item["request_brief_preview"] = _single_line_preview(item.get("request_brief"), limit=160)
             expert_requests.append(item)
     conn.close()
     selected_training_link = None
@@ -2434,10 +3028,13 @@ def admin_trainer():
         search_query=(request.args.get("q") or "").strip(),
         selected_note_type=(request.args.get("note_type") or "").strip(),
         note_type_choices=NOTE_TYPE_CHOICES,
+        canonical_notes=canonical_notes,
+        gold_examples=gold_examples,
         expert_users=expert_users,
         expert_requests=expert_requests,
         urgent_scenarios=urgent_scenarios,
         curriculum_modules=_curriculum_modules(),
+        scenario_batch_date=(daily_scenario_result or {}).get("batch_date"),
         error=error,
         created=created,
         return_to_trainer_hub=selected_path == "3" and selected_training_view == "trainer_roster",
@@ -2588,12 +3185,35 @@ def trainer_review_scenario(scenario_id):
 @require_trainer_auth
 def trainer_generate_training_draft():
     payload = request.get_json(silent=True) or {}
-    context, status_code, error_response = build_generation_context(payload, use_user_template=False)
+    context, error_response, status_code = build_generation_context(payload, use_user_template=False)
     if error_response:
-        return jsonify(error_response), status_code
+        return error_response, status_code
+    try:
+        note_text, generation_meta = two_stage_generate(
+            context["shorthand"],
+            user_id=session.get("user_id"),
+            note_type=context["note_type"],
+            template_profile=context.get("template_profile"),
+            training_example_id=payload.get("training_example_id"),
+            specialty=context["specialty"],
+            template_content=context.get("template_content"),
+            retrieved_examples=context.get("retrieved_examples"),
+            case_facts=context.get("case_facts"),
+        )
+    except GenerationLimitError as exc:
+        return jsonify({"error": str(exc)}), 429
+    except RateLimitError:
+        return jsonify({"error": "AI generation is temporarily unavailable. Please try again shortly."}), 503
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": f"Generation failed: {str(exc)}"}), 500
     return jsonify({
-        "note": context["note"],
+        "note": note_text,
         "case_facts": context["case_facts"],
+        "usage": generation_meta.get("usage", {}),
+        "asserted_from_model": generation_meta.get("asserted_from_model", {}),
+        "validation": generation_meta.get("validation", {}),
         "timings": context.get("timings", {}),
     })
 
@@ -2627,12 +3247,7 @@ def expert_generate_request_draft_stream(request_id):
     if error_response:
         return error_response, status_code
 
-    prompt = context["prompt"]
-
     def generate():
-        request_started_at = perf_counter()
-        first_delta_ms = None
-
         yield sse_event({
             "type": "meta",
             "case_facts": context["case_facts"],
@@ -2644,71 +3259,32 @@ def expert_generate_request_draft_stream(request_id):
         })
 
         try:
-            with requests.post(
-                "https://api.openai.com/v1/responses",
-                headers={
-                    "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "gpt-5-mini",
-                    "input": prompt,
-                    "stream": True,
-                },
-                stream=True,
-                timeout=300,
-            ) as r:
-                r.raise_for_status()
-                saw_done = False
-                for raw_line in r.iter_lines(decode_unicode=True):
-                    if not raw_line or not raw_line.startswith("data: "):
-                        continue
-                    payload_str = raw_line[6:].strip()
-                    if payload_str == "[DONE]":
-                        break
-                    try:
-                        event = json.loads(payload_str)
-                    except json.JSONDecodeError:
-                        continue
-                    event_type = event.get("type")
-                    if event_type == "response.output_text.delta":
-                        delta = event.get("delta", "")
-                        if delta:
-                            if first_delta_ms is None:
-                                first_delta_ms = round((perf_counter() - request_started_at) * 1000, 1)
-                            yield sse_event({"type": "delta", "delta": delta})
-                    elif event_type == "response.completed":
-                        saw_done = True
-                        yield sse_event({
-                            "type": "done",
-                            "timings": {
-                                **context.get("timings", {}),
-                                "first_delta_ms": first_delta_ms,
-                                "stream_total_ms": round((perf_counter() - request_started_at) * 1000, 1),
-                            }
-                        })
-                    elif event_type == "response.error":
-                        message = event.get("error", {}).get("message", "Streaming failed.")
-                        yield sse_event({"type": "error", "error": message})
-                        return
-                if not saw_done:
-                    yield sse_event({
-                        "type": "done",
-                        "timings": {
-                            **context.get("timings", {}),
-                            "first_delta_ms": first_delta_ms,
-                            "stream_total_ms": round((perf_counter() - request_started_at) * 1000, 1),
-                        }
-                    })
-        except requests.HTTPError as e:
-            try:
-                body = e.response.json()
-                message = body.get("error", {}).get("message", str(e))
-            except Exception:
-                message = str(e)
-            yield sse_event({"type": "error", "error": f"Generation failed: {message}"})
-        except Exception as e:
-            yield sse_event({"type": "error", "error": f"Generation failed: {str(e)}"})
+            note_text, generation_meta = two_stage_generate(
+                context["shorthand"],
+                user_id=session.get("user_id"),
+                note_type=context["note_type"],
+                template_profile=context.get("template_profile"),
+                specialty=context["specialty"],
+                template_content=context.get("template_content"),
+                retrieved_examples=context.get("retrieved_examples"),
+                case_facts=context.get("case_facts"),
+            )
+            yield sse_event({"type": "delta", "delta": note_text})
+            yield sse_event({
+                "type": "done",
+                "timings": context.get("timings", {}),
+                "usage": generation_meta.get("usage", {}),
+                "asserted_from_model": generation_meta.get("asserted_from_model", {}),
+                "validation": generation_meta.get("validation", {}),
+            })
+        except GenerationLimitError as exc:
+            yield sse_event({"type": "error", "error": str(exc)})
+        except RateLimitError:
+            yield sse_event({"type": "error", "error": "AI generation is temporarily unavailable. Please try again shortly."})
+        except ValueError as exc:
+            yield sse_event({"type": "error", "error": str(exc)})
+        except Exception as exc:
+            yield sse_event({"type": "error", "error": f"Generation failed: {str(exc)}"})
 
     return Response(
         stream_with_context(generate()),
@@ -2932,6 +3508,8 @@ def admin_trainers():
             "last_name": item.get("expert_last_name"),
             "credential_title": item.get("expert_credential_title"),
         })
+        item["expert_phone_display"] = _format_phone_display(item.get("expert_phone"))
+        item["request_brief_preview"] = _single_line_preview(item.get("request_brief"), limit=160)
         expert_requests.append(item)
     conn.close()
     return render_template(
@@ -2943,6 +3521,211 @@ def admin_trainers():
         error=error,
         created=request.args.get("created"),
     )
+
+
+@app.route("/admin/trainers/requests/<int:request_id>/cancel", methods=["POST"])
+@require_admin_auth
+def cancel_expert_request(request_id):
+    return_to = (request.form.get("return_to") or "").strip()
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "DELETE FROM expert_requests WHERE id = ? AND status = 'pending'",
+        (request_id,),
+    )
+    conn.commit()
+    deleted = cur.rowcount or 0
+    conn.close()
+
+    message = "Request canceled." if deleted else "Only pending requests can be canceled."
+    if return_to == "trainer_hub":
+        return redirect(url_for("admin_trainer", path=3, view="trainer_roster", created=message))
+    return redirect(url_for("admin_trainers", created=message))
+
+
+@app.route("/admin/trainer/canonical-notes", methods=["POST"])
+@require_admin_auth
+def create_canonical_note():
+    note_type = (request.form.get("note_type") or "consult_note").strip()
+    descriptor = (request.form.get("descriptor") or "").strip()
+    title = (request.form.get("title") or "").strip()
+    raw_note = (request.form.get("canonical_note_text") or "").strip()
+
+    if note_type not in ALLOWED_NOTE_TYPES:
+        note_type = "consult_note"
+
+    if not raw_note:
+        return redirect(url_for("admin_trainer", path=2, view="training_library", error="Paste a note to save it into the Master Note Canon."))
+
+    scrubbed_note, replacement_count = _deidentify_phi_text(raw_note)
+    if not scrubbed_note:
+        return redirect(url_for("admin_trainer", path=2, view="training_library", error="The note was empty after de-identification."))
+
+    resolved_title = title or _canonical_note_title(scrubbed_note, note_type)
+    created_by = session.get("phone") or session.get("user_email") or f"admin-{session.get('admin_id') or 'unknown'}"
+    module_key = _infer_feedback_module(
+        note_type,
+        " ".join([descriptor, raw_note]),
+        generated_note=resolved_title,
+    )
+    module_label = _module_label(module_key)
+    editor_note = "Canonical EMR note intake."
+    if descriptor:
+        editor_note += f" Descriptor: {descriptor}."
+    if replacement_count:
+        editor_note += f" PHI scrub pass replaced {replacement_count} field{'s' if replacement_count != 1 else ''}."
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        """
+        INSERT INTO training_examples (
+            specialty, note_type, title, shorthand_input, generated_draft, corrected_output,
+            status, issue_tags, editor_notes, created_by, module_key, module_label, source_kind, in_master_canon
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """,
+        (
+            ACTIVE_CURRICULUM_SPECIALTY,
+            note_type,
+            resolved_title,
+            scrubbed_note,
+            None,
+            scrubbed_note,
+            "gold",
+            "canonical-note",
+            editor_note,
+            created_by,
+            module_key,
+            module_label,
+            "canonical_note",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    status = "Master note canon entry saved."
+    if replacement_count:
+        status += f" Extra PHI scrub applied to {replacement_count} field{'s' if replacement_count != 1 else ''}."
+    return redirect(url_for("admin_trainer", path=2, view="training_library", created=status))
+
+
+@app.route("/admin/training-examples/<int:feedback_id>/promote-to-canon", methods=["POST"])
+@require_admin_auth
+def promote_feedback_note_to_canon(feedback_id):
+    payload = request.get_json(silent=True) or {}
+
+    specialty = (payload.get("specialty") or "").strip()
+    note_type = (payload.get("note_type") or "consult_note").strip()
+    title = (payload.get("title") or "").strip()
+    shorthand_input = (payload.get("shorthand_input") or "").strip()
+    generated_draft = (payload.get("generated_draft") or "").strip()
+    corrected_output = (payload.get("corrected_output") or "").strip()
+    status = (payload.get("status") or "approved").strip()
+    issue_tags = payload.get("issue_tags", [])
+    editor_notes = (payload.get("editor_notes") or "").strip()
+    accepted_assumptions_json = (payload.get("accepted_assumptions_json") or "[]").strip() or "[]"
+    module_key = _normalize_module_key(payload.get("module_key"))
+    module_label = GENERAL_SURGERY_MODULE_MAP.get(module_key, {}).get("label") if module_key else None
+
+    if note_type not in ALLOWED_NOTE_TYPES:
+        return jsonify({"error": "Invalid note type"}), 400
+    if status not in TRAINING_STATUSES:
+        return jsonify({"error": "Invalid training status"}), 400
+    if not specialty or not shorthand_input or not corrected_output:
+        return jsonify({"error": "Specialty, shorthand input, and corrected output are required"}), 400
+
+    issue_tags_str = ", ".join(issue_tags) if isinstance(issue_tags, list) else str(issue_tags or "")
+    canon_title = title or _canonical_note_title(corrected_output, note_type)
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id FROM feedback WHERE id = ?", (feedback_id,))
+    if not cur.fetchone():
+        conn.close()
+        return jsonify({"error": "Live note not found."}), 404
+
+    cur.execute(
+        """
+        SELECT id
+        FROM training_examples
+        WHERE source_kind = 'admin-review'
+          AND COALESCE(in_master_canon, 0) = 1
+          AND shorthand_input = ?
+          AND corrected_output = ?
+        LIMIT 1
+        """,
+        (shorthand_input, corrected_output),
+    )
+    existing = cur.fetchone()
+    if existing:
+        cur.execute(
+            """
+            UPDATE training_examples
+            SET specialty = ?,
+                note_type = ?,
+                title = ?,
+                generated_draft = ?,
+                corrected_output = ?,
+                status = ?,
+                issue_tags = ?,
+                editor_notes = ?,
+                module_key = ?,
+                module_label = ?,
+                accepted_assumptions_json = ?,
+                in_master_canon = 1,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (
+                specialty,
+                note_type,
+                canon_title,
+                generated_draft,
+                corrected_output,
+                status,
+                issue_tags_str,
+                editor_notes,
+                module_key or None,
+                module_label,
+                accepted_assumptions_json,
+                existing["id"],
+            ),
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"status": "ok"})
+
+    cur.execute(
+        """
+        INSERT INTO training_examples (
+            specialty, note_type, title, shorthand_input, generated_draft, corrected_output,
+            status, issue_tags, editor_notes, created_by, module_key, module_label,
+            accepted_assumptions_json, source_kind, in_master_canon
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
+        """,
+        (
+            specialty,
+            note_type,
+            canon_title,
+            shorthand_input,
+            generated_draft,
+            corrected_output,
+            status,
+            issue_tags_str,
+            editor_notes,
+            "admin-team",
+            module_key or None,
+            module_label,
+            accepted_assumptions_json,
+            "admin-review",
+        )
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "ok"})
 
 
 @app.route("/admin/trainers/<int:trainer_id>/update", methods=["POST"])
@@ -3455,21 +4238,24 @@ def generate_note():
         return error_response, status_code
 
     try:
-        response = client.responses.create(
-            model="gpt-5-mini",
-            input=context["prompt"]
+        note_text, generation_meta = two_stage_generate(
+            context["shorthand"],
+            user_id=session.get("user_id"),
+            note_type=context["note_type"],
+            template_profile=context.get("template_profile"),
+            specialty=context["specialty"],
+            template_content=context.get("template_content"),
+            retrieved_examples=context.get("retrieved_examples"),
+            case_facts=context.get("case_facts"),
         )
-        note_text = response.output_text
-
+    except GenerationLimitError as exc:
+        return jsonify({"error": str(exc)}), 429
     except RateLimitError:
-        return jsonify({
-            "error": "AI generation is temporarily unavailable. Please try again shortly."
-        }), 503
-
-    except Exception as e:
-        return jsonify({
-            "error": f"Generation failed: {str(e)}"
-        }), 500
+        return jsonify({"error": "AI generation is temporarily unavailable. Please try again shortly."}), 503
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": f"Generation failed: {str(exc)}"}), 500
 
     return jsonify({
         "note": note_text,
@@ -3478,6 +4264,9 @@ def generate_note():
         "note_type": context["note_type"],
         "used_template": bool(context["template_content"]),
         "teaching_signals": context.get("teaching_signals", {}),
+        "usage": generation_meta.get("usage", {}),
+        "asserted_from_model": generation_meta.get("asserted_from_model", {}),
+        "validation": generation_meta.get("validation", {}),
     })
 
 
@@ -3490,12 +4279,7 @@ def generate_note_stream():
     if error_response:
         return error_response, status_code
 
-    prompt = context["prompt"]
-
     def generate():
-        request_started_at = perf_counter()
-        first_delta_ms = None
-
         yield sse_event({
             "type": "meta",
             "case_facts": context["case_facts"],
@@ -3507,86 +4291,32 @@ def generate_note_stream():
         })
 
         try:
-            with requests.post(
-                "https://api.openai.com/v1/responses",
-                headers={
-                    "Authorization": f"Bearer {os.getenv('OPENAI_API_KEY')}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": "gpt-5-mini",
-                    "input": prompt,
-                    "stream": True,
-                },
-                stream=True,
-                timeout=300,
-            ) as r:
-                r.raise_for_status()
-
-                saw_done = False
-
-                for raw_line in r.iter_lines(decode_unicode=True):
-                    if not raw_line:
-                        continue
-
-                    if not raw_line.startswith("data: "):
-                        continue
-
-                    payload_str = raw_line[6:].strip()
-
-                    if payload_str == "[DONE]":
-                        break
-
-                    try:
-                        event = json.loads(payload_str)
-                    except json.JSONDecodeError:
-                        continue
-
-                    event_type = event.get("type")
-
-                    if event_type == "response.output_text.delta":
-                        delta = event.get("delta", "")
-                        if delta:
-                            if first_delta_ms is None:
-                                first_delta_ms = round((perf_counter() - request_started_at) * 1000, 1)
-                            yield sse_event({"type": "delta", "delta": delta})
-
-                    elif event_type == "response.completed":
-                        saw_done = True
-                        yield sse_event({
-                            "type": "done",
-                            "timings": {
-                                **context.get("timings", {}),
-                                "first_delta_ms": first_delta_ms,
-                                "stream_total_ms": round((perf_counter() - request_started_at) * 1000, 1),
-                            }
-                        })
-
-                    elif event_type == "response.error":
-                        message = event.get("error", {}).get("message", "Streaming failed.")
-                        yield sse_event({"type": "error", "error": message})
-                        return
-
-                if not saw_done:
-                    yield sse_event({
-                        "type": "done",
-                        "timings": {
-                            **context.get("timings", {}),
-                            "first_delta_ms": first_delta_ms,
-                            "stream_total_ms": round((perf_counter() - request_started_at) * 1000, 1),
-                        }
-                    })
-
-        except requests.HTTPError as e:
-            try:
-                body = e.response.json()
-                message = body.get("error", {}).get("message", str(e))
-            except Exception:
-                message = str(e)
-            yield sse_event({"type": "error", "error": f"Generation failed: {message}"})
-
-        except Exception as e:
-            yield sse_event({"type": "error", "error": f"Generation failed: {str(e)}"})
+            note_text, generation_meta = two_stage_generate(
+                context["shorthand"],
+                user_id=session.get("user_id"),
+                note_type=context["note_type"],
+                template_profile=context.get("template_profile"),
+                specialty=context["specialty"],
+                template_content=context.get("template_content"),
+                retrieved_examples=context.get("retrieved_examples"),
+                case_facts=context.get("case_facts"),
+            )
+            yield sse_event({"type": "delta", "delta": note_text})
+            yield sse_event({
+                "type": "done",
+                "timings": context.get("timings", {}),
+                "usage": generation_meta.get("usage", {}),
+                "asserted_from_model": generation_meta.get("asserted_from_model", {}),
+                "validation": generation_meta.get("validation", {}),
+            })
+        except GenerationLimitError as exc:
+            yield sse_event({"type": "error", "error": str(exc)})
+        except RateLimitError:
+            yield sse_event({"type": "error", "error": "AI generation is temporarily unavailable. Please try again shortly."})
+        except ValueError as exc:
+            yield sse_event({"type": "error", "error": str(exc)})
+        except Exception as exc:
+            yield sse_event({"type": "error", "error": f"Generation failed: {str(exc)}"})
 
     return Response(
         stream_with_context(generate()),
@@ -3596,6 +4326,48 @@ def generate_note_stream():
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.route("/api/notes/<int:note_id>/finalize", methods=["POST"])
+@require_user_auth
+def finalize_note(note_id):
+    payload = request.get_json(silent=True) or {}
+    final_text = (payload.get("final_text") or "").strip()
+    phi_merged = bool(payload.get("phi_merged"))
+
+    if not final_text:
+        return jsonify({"error": "Final text is required."}), 400
+    if not phi_merged:
+        return jsonify({"error": "Confirm PHI has been merged locally before finalizing."}), 400
+
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute("SELECT id, editor_notes FROM training_examples WHERE id = ?", (note_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        return jsonify({"error": "Note not found."}), 404
+
+    finalized_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+    audit_line = f"Finalized by user {session['user_id']} at {finalized_at}"
+    cur.execute(
+        """
+        UPDATE training_examples
+        SET corrected_output = ?,
+            editor_notes = ?,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+        """,
+        (
+            final_text,
+            _append_editor_note(row["editor_notes"], audit_line),
+            note_id,
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    return jsonify({"status": "ok"})
 
 
 @app.route("/api/feedback", methods=["POST"])
@@ -3752,28 +4524,16 @@ def scenario_hub():
 
     conn = get_conn()
     cur = conn.cursor()
+    daily_result = _generate_daily_urgent_scenarios(conn, cur, limit=5)
+    generated_error = request.args.get("generate_error") or daily_result.get("error")
 
-    query = """
-        SELECT id, specialty, note_type, title, module_key, module_label, module_rank, diagnosis, procedure_focus, complexity_level,
-               scenario_status, scenario_brief, learning_objectives, model_confidence, review_count,
-               approved_count, gold_count, average_edit_similarity, next_target_level, updated_at
-        FROM scenario_templates
-        WHERE specialty = ?
-    """
-    params = [specialty_filter]
+    scenarios = daily_result["rows"]
     if module_filter:
-        query += " AND module_key = ?"
-        params.append(module_filter)
+        scenarios = [row for row in scenarios if row.get("module_key") == module_filter]
     if note_type_filter:
-        query += " AND note_type = ?"
-        params.append(note_type_filter)
+        scenarios = [row for row in scenarios if row.get("note_type") == note_type_filter]
     if level_filter.isdigit():
-        query += " AND next_target_level = ?"
-        params.append(int(level_filter))
-
-    query += " ORDER BY curriculum_pressure DESC, COALESCE(user_feedback_score, 0) ASC, COALESCE(module_rank, 999) ASC, next_target_level ASC, model_confidence ASC, review_count ASC, updated_at DESC LIMIT 5"
-    cur.execute(query, params)
-    scenarios = [_prepare_scenario_for_display(row) for row in cur.fetchall()]
+        scenarios = [row for row in scenarios if int(row.get("next_target_level") or 0) == int(level_filter)]
 
     cur.execute(
         """
@@ -3830,6 +4590,8 @@ def scenario_hub():
         scenarios=scenarios,
         module_rows=module_rows,
         summary=summary,
+        generated_error=generated_error,
+        scenario_batch_date=daily_result.get("batch_date"),
         selected_specialty=specialty_filter,
         selected_module=module_filter,
         selected_note_type=note_type_filter,
@@ -3844,72 +4606,13 @@ def refresh_urgent_scenarios():
     specialty = ACTIVE_CURRICULUM_SPECIALTY
     ensure_default_scenarios(specialty_filter=specialty)
 
-    if not os.getenv("OPENAI_API_KEY"):
-        return redirect(url_for("scenario_hub", generate_error="Missing OPENAI_API_KEY environment variable."))
-
     conn = get_conn()
     cur = conn.cursor()
-    targets = _urgent_scenario_generation_targets(cur, limit=5)
-    existing_titles = _existing_scenario_titles(cur, specialty=specialty)
-    created = 0
-
-    try:
-        for target in targets:
-            module = GENERAL_SURGERY_MODULE_MAP.get(target["module_key"])
-            if not module:
-                continue
-            prompt = build_scenario_generation_prompt(
-                specialty=specialty,
-                note_type=target["note_type"],
-                module_label=module["label"],
-                module_description=module["description"],
-                target_level=target["target_level"],
-                count=1,
-                focus=target["focus"],
-                existing_titles=existing_titles,
-            )
-            response = client.responses.create(model="gpt-5-mini", input=prompt)
-            scenario_batch = _parse_json_array_output((response.output_text or "").strip())
-            if not scenario_batch:
-                continue
-            item = scenario_batch[0]
-            title = (item.get("title") or "").strip()
-            scenario_brief = (item.get("scenario_brief") or "").strip()
-            if not title or not scenario_brief:
-                continue
-            base_title = title
-            suffix = 2
-            existing_title_pool = {existing.lower().strip() for existing in existing_titles}
-            while title.lower() in existing_title_pool:
-                title = f"{base_title} ({suffix})"
-                suffix += 1
-            existing_titles.append(title)
-            _insert_scenario_template(cur, {
-                "specialty": specialty,
-                "note_type": target["note_type"],
-                "module_key": target["module_key"],
-                "module_label": module["label"],
-                "module_rank": module["rank"],
-                "title": title,
-                "diagnosis": (item.get("diagnosis") or "").strip() or None,
-                "procedure_focus": (item.get("procedure_focus") or "").strip() or None,
-                "complexity_level": max(1, min(int(item.get("complexity_level") or target["target_level"]), 3)),
-                "scenario_brief": scenario_brief,
-                "learning_objectives": (item.get("learning_objectives") or "").strip() or None,
-                "generated_by": "urgent-learning-scenario-generator",
-                "focus": target["focus"],
-            })
-            created += 1
-        conn.commit()
-    except RateLimitError:
-        conn.close()
-        return redirect(url_for("scenario_hub", generate_error="AI scenario generation is temporarily unavailable."))
-    except Exception as exc:
-        conn.close()
-        return redirect(url_for("scenario_hub", generate_error=f"Unable to refresh urgent scenarios: {str(exc)}"))
-
+    result = _generate_daily_urgent_scenarios(conn, cur, limit=5, force=True)
     conn.close()
-    return redirect(url_for("scenario_hub", generated=created or 0))
+    if result.get("error"):
+        return redirect(url_for("scenario_hub", generate_error=result["error"]))
+    return redirect(url_for("scenario_hub", generated=result.get("created") or 0))
 
 
 @app.route("/admin/scenarios/seed", methods=["POST"])
@@ -3985,11 +4688,13 @@ def generate_scenarios():
     )
 
     try:
-        response = client.responses.create(
-            model="gpt-5-mini",
-            input=prompt
+        raw_text, _ = call_model_and_log(
+            prompt,
+            user_id=session.get("user_id"),
+            model=DEFAULT_MODEL_NAME,
+            temperature=0.0,
+            max_output_tokens=1800,
         )
-        raw_text = (response.output_text or "").strip()
         scenarios = _parse_json_array_output(raw_text)
 
         created = 0
@@ -4024,6 +4729,8 @@ def generate_scenarios():
                 "learning_objectives": (item.get("learning_objectives") or "").strip() or None,
                 "generated_by": "ai-scenario-generator",
                 "focus": focus,
+                "question_prompt": (item.get("question_prompt") or "").strip() or None,
+                "why_now": (item.get("why_now") or "").strip() or None,
             }
             _insert_scenario_template(cur, scenario_payload)
             created += 1
@@ -4218,9 +4925,9 @@ def training_library():
 
     query = """
         SELECT id, specialty, note_type, title, shorthand_input, generated_draft, corrected_output,
-               status, issue_tags, editor_notes, created_by, created_at, updated_at
+               status, issue_tags, editor_notes, created_by, created_at, updated_at, source_kind, in_master_canon
         FROM training_examples
-        WHERE 1 = 1
+        WHERE (COALESCE(in_master_canon, 0) = 1 OR status IN ('approved', 'gold'))
     """
     params = []
 
@@ -4234,9 +4941,13 @@ def training_library():
         query += " AND status = ?"
         params.append(status_filter)
 
-    query += " ORDER BY updated_at DESC, created_at DESC"
+    query += " ORDER BY COALESCE(in_master_canon, 0) DESC, updated_at DESC, created_at DESC"
     cur.execute(query, params)
-    rows = cur.fetchall()
+    rows = []
+    for row in cur.fetchall():
+        item = dict(row)
+        item["source_label"] = _source_kind_label(item.get("source_kind"))
+        rows.append(item)
 
     cur.execute("""
         SELECT DISTINCT specialty
@@ -4480,25 +5191,34 @@ def generate_training_draft():
         return error_response, status_code
 
     try:
-        response = client.responses.create(
-            model="gpt-5-mini",
-            input=context["prompt"]
+        note_text, generation_meta = two_stage_generate(
+            context["shorthand"],
+            user_id=session.get("user_id"),
+            note_type=context["note_type"],
+            template_profile=context.get("template_profile"),
+            training_example_id=payload.get("training_example_id"),
+            specialty=context["specialty"],
+            template_content=context.get("template_content"),
+            retrieved_examples=context.get("retrieved_examples"),
+            case_facts=context.get("case_facts"),
         )
-        note_text = response.output_text
+    except GenerationLimitError as exc:
+        return jsonify({"error": str(exc)}), 429
     except RateLimitError:
-        return jsonify({
-            "error": "AI generation is temporarily unavailable. Please try again shortly."
-        }), 503
-    except Exception as e:
-        return jsonify({
-            "error": f"Generation failed: {str(e)}"
-        }), 500
+        return jsonify({"error": "AI generation is temporarily unavailable. Please try again shortly."}), 503
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        return jsonify({"error": f"Generation failed: {str(exc)}"}), 500
 
     return jsonify({
         "note": note_text,
         "case_facts": context["case_facts"],
         "procedure_label": context["procedure_label"],
         "note_type": context["note_type"],
+        "usage": generation_meta.get("usage", {}),
+        "asserted_from_model": generation_meta.get("asserted_from_model", {}),
+        "validation": generation_meta.get("validation", {}),
         "timings": context.get("timings", {}),
     })
 
@@ -4556,6 +5276,9 @@ def save_training_example():
             accepted_assumptions_json,
         )
     )
+    created_id = cur.lastrowid
+    if payload.get("in_master_canon"):
+        cur.execute("UPDATE training_examples SET in_master_canon = 1 WHERE id = ?", (created_id,))
     conn.commit()
     conn.close()
 

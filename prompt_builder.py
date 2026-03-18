@@ -623,6 +623,8 @@ Final output requirements:
 - For consult notes, prefer brevity and shorthand-style clinical compression over polished explanatory prose
 - For consult notes, include the required [[FACT]]...[[/FACT]] and [[ASSUMPTION]]...[[/ASSUMPTION]] tags in the final output exactly as instructed
 - For consult notes, do not omit tagging on substantive body text. If a sentence or clause is not a heading, bullet marker, or blank line, it should be wrapped in either [[FACT]] or [[ASSUMPTION]].
+- Append a machine-readable JSON block named ---ASSERTED_FACTS--- containing key assertions (procedure, laterality, estimated_blood_loss, specimen, implants, cpt_codes).
+- If asserting an assumption, the sentence must be wrapped in [[ASSUMPTION]]...[[/ASSUMPTION]].
 """
 
 
@@ -705,8 +707,12 @@ Each object must contain exactly these keys:
 - diagnosis
 - procedure_focus
 - complexity_level
+- question_prompt
+- why_now
 - scenario_brief
 - learning_objectives
 
 The complexity_level must be an integer 1, 2, or 3 matching the requested difficulty.
+- question_prompt should be a direct, high-value ask from the system to the reviewer or expert. It should sound like the system is asking for the exact case/note pattern it most needs help with right now.
+- why_now should be one short sentence explaining what this scenario will help the model iron out.
 """

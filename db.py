@@ -167,10 +167,25 @@ def init_db():
     ensure_column(cur, "training_examples", "module_key", "module_key TEXT")
     ensure_column(cur, "training_examples", "module_label", "module_label TEXT")
     ensure_column(cur, "training_examples", "accepted_assumptions_json", "accepted_assumptions_json TEXT")
+    ensure_column(cur, "training_examples", "in_master_canon", "in_master_canon INTEGER NOT NULL DEFAULT 0")
 
     cur.execute("""
     CREATE INDEX IF NOT EXISTS idx_training_examples_specialty_note_type
     ON training_examples (specialty, note_type, status, created_at DESC)
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS model_usage (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        training_example_id INTEGER,
+        user_id INTEGER,
+        model TEXT,
+        prompt_hash TEXT,
+        tokens_used INTEGER,
+        cost_usd REAL,
+        response_preview TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
     """)
 
     cur.execute("""
@@ -212,6 +227,10 @@ def init_db():
     ensure_column(cur, "scenario_templates", "user_feedback_score", "user_feedback_score REAL NOT NULL DEFAULT 0")
     ensure_column(cur, "scenario_templates", "user_feedback_count", "user_feedback_count INTEGER NOT NULL DEFAULT 0")
     ensure_column(cur, "scenario_templates", "curriculum_pressure", "curriculum_pressure REAL NOT NULL DEFAULT 0")
+    ensure_column(cur, "scenario_templates", "batch_date", "batch_date TEXT")
+    ensure_column(cur, "scenario_templates", "urgency_rank", "urgency_rank INTEGER NOT NULL DEFAULT 0")
+    ensure_column(cur, "scenario_templates", "question_prompt", "question_prompt TEXT")
+    ensure_column(cur, "scenario_templates", "why_now", "why_now TEXT")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS scenario_reviews (

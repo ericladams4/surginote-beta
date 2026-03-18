@@ -125,6 +125,9 @@ Generated Consult Note
 <p class="card-helper subtle-light">
 Review and edit before use.
 </p>
+<p class="card-helper subtle-light">
+Drafts are de-identified. Use client-side merge to insert PHI locally before finalizing.
+</p>
 <div id="outputTemplateRuntime" class="template-runtime-row hidden template-runtime-row-output">
   <span id="outputTemplateRuntimeLabel" class="template-runtime-label"></span>
   <div id="outputTemplateRuntimePills" class="template-runtime-pills"></div>
@@ -199,7 +202,7 @@ window.__APP_STATE__ = {
   activeTemplateSummary: {{ active_template_summary|tojson }}
 };
 </script>
-<script src="/static/app.js"></script>
+<script type="module" src="/static/app.js"></script>
 
 </body>
 </html>
