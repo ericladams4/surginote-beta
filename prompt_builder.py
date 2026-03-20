@@ -224,6 +224,17 @@ If the strict template contains [[EXACT]]...[[/EXACT]] blocks:
 Use the current case facts to fill in the rest of the note naturally around the strict template.
 """
 
+GUIDANCE_TEMPLATE_GUIDANCE = """
+The user has also highlighted surgeon-specific procedural habits, preferred steps, tools, or wording patterns.
+
+If the strict template contains [[GUIDE]]...[[/GUIDE]] blocks:
+- treat them as soft procedural guidance, not verbatim text
+- recognize the pattern and apply it when clinically compatible with the current case
+- preserve the clinical idea, sequence, or idiosyncratic preference even if the final wording changes
+- omit the guidance if it is not compatible with the current case
+- never output the [[GUIDE]] or [[/GUIDE]] markers themselves
+"""
+
 STYLE_EXAMPLE_GUIDANCE = """
 The user has also provided a de-identified example note that reflects their preferred style.
 
@@ -236,6 +247,19 @@ Use it as soft guidance for:
 
 Do not copy stale patient-specific details from the style example.
 Strict template instructions override style-example preferences when they conflict.
+"""
+
+GLOBAL_TONE_GUIDANCE = """
+The user has a global tone profile learned from several de-identified notes.
+
+Use it as high-level cross-note guidance for:
+- overall voice
+- sentence rhythm
+- terseness vs explanation
+- favored structure and documentation habits
+
+Apply this tone across note types unless a note-specific format rule conflicts with it.
+Do not treat the tone summary as exact wording to copy.
 """
 
 
@@ -290,6 +314,16 @@ def _extract_exact_blocks(template_content: str):
     return [spec["text"] for spec in _extract_exact_block_specs(template_content)]
 
 
+def _extract_guide_blocks(template_content: str):
+    if not template_content:
+        return []
+    return [
+        block.strip()
+        for block in re.findall(r"\[\[GUIDE\]\](.*?)\[\[/GUIDE\]\]", template_content, flags=re.IGNORECASE | re.DOTALL)
+        if str(block).strip()
+    ]
+
+
 def _strip_exact_markers(template_content: str):
     if not template_content:
         return ""
@@ -300,6 +334,7 @@ def _strip_exact_markers(template_content: str):
         flags=re.IGNORECASE,
     )
     cleaned = re.sub(r"\[\[/?EXACT\]\]", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\[\[/?GUIDE\]\]", "", cleaned, flags=re.IGNORECASE)
     cleaned = re.sub(
         r"(^|\n)\s*\([^()\n]+\)\s*(?=\n\s*$)",
         r"\1",
@@ -510,9 +545,7 @@ def _build_template_profile_guidance(note_type: str, template_profile):
         return ""
 
     strict_template_text = (template_profile.get("strict_template_text") or "").strip()
-    style_example_text = (template_profile.get("style_example_text") or "").strip()
     strict_enabled = bool(template_profile.get("strict_enabled"))
-    style_enabled = bool(template_profile.get("style_enabled"))
     profile_name = (template_profile.get("name") or "Template profile").strip()
 
     sections = [f"Active template profile: {profile_name}"]
@@ -521,6 +554,7 @@ def _build_template_profile_guidance(note_type: str, template_profile):
         clean_template = _strip_exact_markers(strict_template_text)
         placeholder_guidance = _build_placeholder_mode_guidance(note_type, clean_template)
         exact_specs = _extract_exact_block_specs(strict_template_text)
+        guide_blocks = _extract_guide_blocks(strict_template_text)
         exact_block_section = ""
         if exact_specs:
             joined_blocks = "\n\n".join(
@@ -536,6 +570,15 @@ Exact reusable wording blocks that must be copied verbatim when clinically compa
 {joined_blocks}
 """
 
+        guide_block_section = ""
+        if guide_blocks:
+            guide_block_section = f"""
+{GUIDANCE_TEMPLATE_GUIDANCE}
+
+Surgeon-specific procedural / formatting habits to recognize and apply when compatible:
+{chr(10).join(f"- {block}" for block in guide_blocks)}
+"""
+
         sections.append(f"""
 {STRICT_TEMPLATE_GUIDANCE}
 
@@ -545,17 +588,31 @@ STRICT TEMPLATE:
 {clean_template}
 
 {exact_block_section}
-""".strip())
-
-    if style_enabled and style_example_text:
-        sections.append(f"""
-{STYLE_EXAMPLE_GUIDANCE}
-
-STYLE / TONE / ORGANIZATION EXAMPLE:
-{style_example_text}
+{guide_block_section}
 """.strip())
 
     return "\n\n".join(section for section in sections if section)
+
+
+def _build_global_tone_guidance(global_tone_profile):
+    if not global_tone_profile:
+        return ""
+
+    summary = (global_tone_profile.get("tone_summary") or "").strip()
+    traits = [str(item).strip() for item in (global_tone_profile.get("tone_traits") or []) if str(item).strip()]
+    if not summary and not traits:
+        return ""
+
+    traits_block = "\n".join(f"- {item}" for item in traits) if traits else "- None provided"
+    return f"""
+{GLOBAL_TONE_GUIDANCE}
+
+GLOBAL TONE SUMMARY:
+{summary}
+
+GLOBAL TONE TRAITS:
+{traits_block}
+""".strip()
 
 
 def build_prompt(
@@ -565,6 +622,7 @@ def build_prompt(
     specialty="General Surgery",
     retrieved_examples=None,
     template_profile=None,
+    global_tone_profile=None,
 ):
     note_type = note_type if note_type in NOTE_TYPE_LABELS else "op_note"
     note_label = NOTE_TYPE_LABELS[note_type]
@@ -580,6 +638,7 @@ def build_prompt(
     )
 
     template_section = _build_template_profile_guidance(note_type, template_profile)
+    global_tone_section = _build_global_tone_guidance(global_tone_profile)
     if not template_section and template_content:
         placeholder_guidance = _build_placeholder_mode_guidance(note_type, template_content)
         template_section = f"""
@@ -612,6 +671,8 @@ Structured case facts and source material:
 {compact_case_json}
 
 {retrieved_examples_section}
+
+{global_tone_section}
 
 {template_section}
 

@@ -57,6 +57,34 @@
                 <div class="card-label admin-label-spacing">Phone number</div>
                 <input type="tel" name="phone" class="admin-input" value="{{ current_user.phone or '' }}" required />
               </div>
+              <section class="templates-section-card account-settings-output-card">
+                <div class="templates-section-header">
+                  <div>
+                    <div class="card-label">Editor Text Defaults</div>
+                    <p class="card-helper">
+                      Choose the font style and size SurgiNote should use in the shorthand box and note editor.
+                    </p>
+                  </div>
+                </div>
+                <div class="templates-editor-grid templates-editor-grid-tight">
+                  <label class="templates-field">
+                    <span class="card-label">Font Style</span>
+                    <select name="output_font_family" class="app-select admin-input">
+                      {% for value, label in output_font_family_choices %}
+                        <option value="{{ value }}" {% if output_typography.font_family == value %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                  <label class="templates-field">
+                    <span class="card-label">Font Size</span>
+                    <select name="output_font_size" class="app-select admin-input">
+                      {% for value in output_font_size_choices %}
+                        <option value="{{ value }}" {% if output_typography.font_size == value %}selected{% endif %}>{{ value.replace('px', '') }}</option>
+                      {% endfor %}
+                    </select>
+                  </label>
+                </div>
+              </section>
               <div class="trainer-primary-actions account-settings-actions">
                 <button type="submit" class="primary-action">Save account</button>
               </div>

@@ -33,7 +33,7 @@
                   <div class="admin-guide-meta">{{ lane.meta }}</div>
                   <div class="admin-guide-link-list">
                     {% for link in lane.links %}
-                      <a href="{{ link.href }}" class="admin-guide-link-row {% if selected_training_path == lane.eyebrow.split(' ')[1] and selected_training_view == link.view %}is-active{% endif %}">
+                      <a href="{{ link.destination_href or link.href }}" data-direct-nav="1" class="admin-guide-link-row {% if selected_training_path == lane.eyebrow.split(' ')[1] and selected_training_view == link.view %}is-active{% endif %}">
                         <span class="admin-guide-link-label">{{ link.label }}</span>
                         <span class="admin-guide-link-meta">{{ link.meta }}</span>
                       </a>
@@ -50,6 +50,12 @@
             <a href="/admin/trainer?path=3{% if prefill_feedback %}&feedback_id={{ prefill_feedback.id }}{% endif %}" class="trainer-path-tab {% if selected_training_path == '3' %}is-active{% endif %}">Path 3</a>
           </section>
 
+          {% if error %}
+          <div class="feedback-status trainer-page-status is-error">{{ error }}</div>
+          {% elif created %}
+          <div class="feedback-status trainer-page-status is-success">{{ created }}</div>
+          {% endif %}
+
           {% if selected_training_path == "1" %}
           <section class="app-card trainer-workbench">
             <div class="trainer-workbench-header">
@@ -59,13 +65,6 @@
               </div>
               <div class="trainer-workbench-chip">In-house rescue</div>
             </div>
-
-            <div class="trainer-path-tabs" role="tablist" aria-label="Path 1 views">
-              <a href="/admin/trainer?path=1&view=trainer{% if prefill_feedback %}&feedback_id={{ prefill_feedback.id }}{% endif %}" class="trainer-path-tab {% if selected_training_view == 'trainer' %}is-active{% endif %}">Open trainer</a>
-              <a href="/admin/trainer?path=1&view=live_notes{% if prefill_feedback %}&feedback_id={{ prefill_feedback.id }}{% endif %}" class="trainer-path-tab {% if selected_training_view == 'live_notes' %}is-active{% endif %}">Review live notes</a>
-            </div>
-
-            {% if selected_training_view == "live_notes" %}
             <section class="admin-notes-card">
               <div class="admin-section-head">
                 <div>
@@ -141,7 +140,10 @@
                           </div>
                         </td>
                         <td class="admin-table-action-cell">
-                          <a href="/admin/trainer?path=1&view=trainer&feedback_id={{ row.id }}" class="admin-row-action-link">Train from note</a>
+                          <a href="/admin/trainer?path=1&view=live_notes&feedback_id={{ row.id }}" class="admin-row-action-link">Train from note</a>
+                          <form method="POST" action="/admin/feedback/{{ row.id }}/add-to-canon" class="admin-inline-form">
+                            <button type="submit" class="admin-row-action-link admin-row-action-button">Add to canon</button>
+                          </form>
                         </td>
                       </tr>
                     {% else %}
@@ -153,97 +155,99 @@
                 </table>
               </div>
             </section>
-            {% else %}
-            <div class="trainer-control-strip">
-              <div class="trainer-control trainer-control-compact">
-                <div class="card-label admin-label-spacing">Specialty</div>
-                <select id="trainingSpecialty" class="app-select admin-input">
-                  {% for specialty in specialty_options %}
-                    <option value="{{ specialty }}" {% if specialty == "General Surgery" %}selected{% endif %}>{{ specialty }}</option>
-                  {% endfor %}
-                </select>
-              </div>
 
-              <div class="trainer-control trainer-control-compact">
-                <div class="card-label admin-label-spacing">Note type</div>
-                <select id="trainingNoteType" class="app-select admin-input">
-                  <option value="consult_note" selected>Consult Note</option>
-                  <option value="clinic_note">Clinic Note</option>
-                  <option value="op_note">Op Note</option>
-                </select>
-              </div>
-
-              <div class="trainer-control trainer-control-wide">
-                <div class="card-label admin-label-spacing">Training title</div>
-                <input
-                  id="trainingTitle"
-                  class="admin-input"
-                  placeholder="e.g. straightforward appendicitis admit from ED"
-                />
-              </div>
-            </div>
-
-            <div class="trainer-shorthand-section">
+            {% if prefill_feedback %}
+            <section class="trainer-workbench trainer-note-rescue-shell">
               <div class="trainer-section-head">
                 <div>
-                  <div class="card-label">Shorthand input</div>
-                  <p class="card-helper">Enter the source shorthand exactly how a surgeon or team member would realistically type it.</p>
+                  <div class="card-label">Tracked rescue</div>
+                  <p class="card-helper">Edit this weak live note, review tracked changes, then decide whether it should simply teach the model or belong in the master note canon.</p>
+                </div>
+                <a href="/admin/trainer?path=1&view=live_notes" class="secondary-action admin-link-button">Close</a>
+              </div>
+
+              <input type="hidden" id="trainingSpecialty" value="General Surgery" />
+              <input type="hidden" id="trainingGeneratedDraft" />
+              <input type="hidden" id="trainingAcceptedAssumptions" value="[]" />
+
+              <div class="trainer-control-strip trainer-note-rescue-meta">
+                <div class="trainer-control trainer-control-compact">
+                  <div class="card-label admin-label-spacing">Note type</div>
+                  <select id="trainingNoteType" class="app-select admin-input">
+                    <option value="consult_note" {% if (prefill_feedback.note_type or '') == 'consult_note' %}selected{% endif %}>Consult Note</option>
+                    <option value="clinic_note" {% if (prefill_feedback.note_type or '') == 'clinic_note' %}selected{% endif %}>Clinic Note</option>
+                    <option value="op_note" {% if (prefill_feedback.note_type or '') == 'op_note' %}selected{% endif %}>Op Note</option>
+                  </select>
+                </div>
+                <div class="trainer-control trainer-control-wide">
+                  <div class="card-label admin-label-spacing">Learning title</div>
+                  <input id="trainingTitle" class="admin-input" value="{{ prefill_feedback.suggested_title or '' }}" placeholder="Short label for this rescued note" />
+                </div>
+                <div class="trainer-control trainer-control-compact">
+                  <div class="card-label admin-label-spacing">Save as</div>
+                  <select id="trainingStatus" class="app-select admin-input">
+                    {% for training_status in training_statuses %}
+                      <option value="{{ training_status }}" {% if training_status == "approved" %}selected{% endif %}>{{ training_status.replace("_", " ").title() }}</option>
+                    {% endfor %}
+                  </select>
                 </div>
               </div>
 
-              <textarea
-                id="trainingShorthand"
-                class="admin-textarea trainer-shorthand-textarea"
-                rows="7"
-                placeholder="34yoM no PMH here w/ 18h LQ pain, nausea, anorexia. CT uncomplicated appy. WBC 14. Mild LQ ttp no diffuse peritonitis. Admit, NPO, ceftriaxone/Flagyl, lap appy in AM."
-              ></textarea>
-
-              <div class="trainer-action-bar">
-                <div class="trainer-primary-actions">
-                  <button id="generateTrainingDraftBtn" class="primary-action">Generate draft</button>
-                  <button id="clearTrainingDraftBtn" class="outline-action">Clear</button>
-                </div>
-                <div id="trainingDraftStatus" class="feedback-status trainer-inline-status"></div>
-              </div>
-            </div>
-
-            <input type="hidden" id="trainingGeneratedDraft" />
-            <input type="hidden" id="trainingAcceptedAssumptions" value="[]" />
-
-            <div class="trainer-editor-grid">
-              <section class="trainer-pane">
-                <div class="trainer-section-head">
-                  <div>
-                    <div class="card-label">Model draft</div>
-                    <p class="card-helper">Review the generated draft, including surfaced assumptions.</p>
-                  </div>
-                </div>
-                <div class="expert-request-draft-card trainer-draft-card">
-                  <div id="trainingConsultDraft" class="consult-output hidden expert-request-consult-output"></div>
-                  <textarea
-                    id="trainingDraftText"
-                    class="admin-textarea admin-textarea-lg trainer-output-textarea expert-request-draft-text hidden"
-                    rows="18"
-                    readonly
-                    placeholder="Generated draft will appear here."
-                  ></textarea>
-                  <div id="trainingAssumptionPopover" class="consult-assumption-popover hidden expert-assumption-popover">
-                    <div class="consult-assumption-label">Assumption</div>
-                    <input type="text" id="trainingAssumptionInput" class="consult-assumption-input" />
-                    <div class="consult-assumption-actions">
-                      <button type="button" id="trainingAssumptionAcceptBtn" class="consult-assumption-accept">Mark good for training</button>
+              <div class="trainer-editor-grid">
+                <section class="trainer-pane">
+                  <div class="trainer-section-head">
+                    <div>
+                      <div class="card-label">Original shorthand</div>
+                      <p class="card-helper">This is the source shorthand that produced the weak live note.</p>
                     </div>
-                    <div class="consult-assumption-help">If this assumption is reasonable, keep it and carry that signal into the saved training example.</div>
                   </div>
-                  <div id="trainingDraftEmpty" class="expert-request-draft-empty">Generate a draft from shorthand to start the review.</div>
-                </div>
-              </section>
+                  <textarea
+                    id="trainingShorthand"
+                    class="admin-textarea trainer-shorthand-textarea"
+                    rows="8"
+                    placeholder="Original shorthand"
+                  >{{ prefill_feedback.shorthand or "" }}</textarea>
+                </section>
+
+                <section class="trainer-pane">
+                  <div class="trainer-section-head">
+                    <div>
+                      <div class="card-label">Generated draft</div>
+                      <p class="card-helper">Review what SurgiNote produced before human correction.</p>
+                    </div>
+                  </div>
+                  <div id="trainingDraftWrap" class="expert-request-draft-card trainer-draft-card output-wrap">
+                    <div id="trainingConsultDraft" class="consult-output hidden expert-request-consult-output"></div>
+                    <textarea
+                      id="trainingDraftText"
+                      class="admin-textarea admin-textarea-lg trainer-output-textarea expert-request-draft-text hidden"
+                      rows="18"
+                      readonly
+                      placeholder="Generated draft will appear here."
+                    ></textarea>
+                    <div id="trainingAssumptionPopover" class="consult-assumption-popover hidden expert-assumption-popover">
+                      <div class="consult-assumption-label">Assumption</div>
+                      <input type="text" id="trainingAssumptionInput" class="consult-assumption-input" />
+                      <div class="consult-assumption-actions">
+                        <button type="button" id="trainingAssumptionAcceptBtn" class="consult-assumption-accept">Mark good for training</button>
+                      </div>
+                      <div class="consult-assumption-help">If this assumption is reasonable, keep it and carry that signal into the saved learning example.</div>
+                    </div>
+                    <div id="trainingDraftEmpty" class="expert-request-draft-empty">The generated note will appear here.</div>
+                    <div id="trainingDraftLoading" class="generating-status hidden" aria-live="polite">
+                      <div class="generating-status-spinner"></div>
+                      <div class="generating-status-text">Generating draft...</div>
+                      <div class="generating-status-subtext">Anesthesia delay.</div>
+                    </div>
+                  </div>
+                </section>
+              </div>
 
               <section class="trainer-pane trainer-pane-gold">
                 <div class="trainer-section-head">
                   <div>
                     <div class="card-label">Tracked revision</div>
-                    <p class="card-helper">Revise the draft. Deletions will be crossed out and additions will glow purple below.</p>
+                    <p class="card-helper">Revise the note below. Deletions will strike through and additions will glow purple.</p>
                   </div>
                 </div>
                 <textarea
@@ -260,48 +264,56 @@
                   </div>
                 </div>
               </section>
-            </div>
 
-            <div class="trainer-footer-grid">
-              <div class="trainer-footer-left">
-                <div class="trainer-meta-grid">
-                  <div>
-                    <div class="card-label admin-label-spacing">Status</div>
-                    <select id="trainingStatus" class="app-select admin-input">
-                      {% for training_status in training_statuses %}
-                        <option value="{{ training_status }}" {% if training_status == "approved" %}selected{% endif %}>{{ training_status.replace("_", " ").title() }}</option>
-                      {% endfor %}
-                    </select>
+              <div class="trainer-footer-grid">
+                <div class="trainer-footer-left">
+                  <div class="training-meta-grid">
+                    <div>
+                      <div class="card-label admin-label-spacing">Issue tags</div>
+                      <input
+                        id="trainingIssueTags"
+                        class="admin-input"
+                        placeholder="formatting, weak structure, bad assumption"
+                      />
+                    </div>
+                    <div>
+                      <div class="card-label admin-label-spacing">Module</div>
+                      <input class="admin-input" value="{{ prefill_feedback.module_label or 'Unmapped module' }}" readonly />
+                    </div>
                   </div>
 
-                  <div>
-                    <div class="card-label admin-label-spacing">Issue tags</div>
-                    <input
-                      id="trainingIssueTags"
-                      class="admin-input"
-                      placeholder="formatting, bad assumption, not surgeon-like"
-                    />
+                  <div class="card-label admin-label-spacing">Why it got a low rating</div>
+                  <textarea
+                    id="trainingLowRatingReason"
+                    class="admin-textarea trainer-notes-textarea"
+                    rows="4"
+                    placeholder="Tell SurgiNote exactly why this note was weak. Example: buried the plan, missed the key operative detail, sounded generic, or introduced an unsupported assumption."
+                  ></textarea>
+
+                  <div class="card-label admin-label-spacing">Editor notes</div>
+                  <textarea
+                    id="trainingEditorNotes"
+                    class="admin-textarea trainer-notes-textarea"
+                    rows="4"
+                    placeholder="Optional note about what needed correction."
+                  ></textarea>
+                </div>
+
+                <div class="trainer-footer-right">
+                  <div class="trainer-save-panel">
+                    <div class="card-label">Learn from this note</div>
+                    <p class="card-helper">Save this corrected version into the training corpus, or promote it into the master note canon if it should shape the system more strongly.</p>
+                    <label class="templates-toggle-row admin-inline-toggle trainer-canon-toggle">
+                      <input type="checkbox" id="trainingInMasterCanon" {% if request.args.get('canon') == '1' %}checked{% endif %} />
+                      <span class="templates-toggle-copy">Add to Master Note Canon</span>
+                    </label>
+                    <button id="saveTrainingExampleBtn" class="primary-action trainer-save-button">Save rescued note</button>
+                    <div id="trainingDraftStatus" class="feedback-status trainer-inline-status"></div>
+                    <div id="trainingSaveStatus" class="feedback-status trainer-inline-status"></div>
                   </div>
                 </div>
-
-                <div class="card-label admin-label-spacing">Editor notes</div>
-                <textarea
-                  id="trainingEditorNotes"
-                  class="admin-textarea trainer-notes-textarea"
-                  rows="4"
-                  placeholder="Optional internal notes about why this was edited or approved."
-                ></textarea>
               </div>
-
-              <div class="trainer-footer-right">
-                <div class="trainer-save-panel">
-                  <div class="card-label">Finalize example</div>
-                  <p class="card-helper">Save this reviewed pair into the training library for later retrieval, analysis, and tuning.</p>
-                  <button id="saveTrainingExampleBtn" class="primary-action trainer-save-button">Save training example</button>
-                  <div id="trainingSaveStatus" class="feedback-status trainer-inline-status"></div>
-                </div>
-              </div>
-            </div>
+            </section>
             {% endif %}
           </section>
           {% elif selected_training_path == "2" %}
@@ -309,9 +321,9 @@
             <div class="trainer-workbench-header">
               <div>
                 <div class="card-label">Path 2</div>
-                <p class="card-helper">Expert-curated gold standards: maintain the surgeon-reviewed canon that retrieval and downstream tuning should trust most.</p>
+                <p class="card-helper">Expert curated examples: build the master note canon and gold-standard reference set the model learns consistency from.</p>
               </div>
-              <div class="trainer-workbench-chip">Gold-standard canon</div>
+              <div class="trainer-workbench-chip">Master note canon</div>
             </div>
 
             <div class="trainer-path-tabs" role="tablist" aria-label="Path 2 views">
@@ -322,7 +334,137 @@
               {% endfor %}
             </div>
 
-            {% if selected_training_link %}
+            {% if selected_training_view == "training_library" %}
+            <section class="admin-notes-card">
+                <div class="admin-section-head">
+                  <div>
+                  <div class="card-label">Master note canon</div>
+                  <p class="card-helper">Paste de-identified live EMR notes here. SurgiNote will run an extra PHI scrub pass before saving them into the canon of notes trusted to shape the model’s best and most consistent output.</p>
+                  </div>
+                </div>
+
+              <form method="POST" action="/admin/trainer/canonical-notes" class="trainer-control-strip">
+                <div class="trainer-control trainer-control-compact">
+                  <div class="card-label admin-label-spacing">Note type</div>
+                  <select name="note_type" class="app-select admin-input">
+                    <option value="consult_note">Consult Note</option>
+                    <option value="clinic_note">Clinic Note</option>
+                    <option value="op_note">Op Note</option>
+                  </select>
+                </div>
+                <div class="trainer-control trainer-control-compact">
+                  <div class="card-label admin-label-spacing">Descriptor</div>
+                  <input name="descriptor" class="admin-input" placeholder="e.g. appy consult, SBO admit, post-op clinic follow-up" />
+                </div>
+                <div class="trainer-control trainer-control-wide">
+                  <div class="card-label admin-label-spacing">Title</div>
+                  <input name="title" class="admin-input" placeholder="Optional title. Leave blank to derive from the note." />
+                </div>
+                <div class="trainer-control trainer-control-full">
+                  <div class="card-label admin-label-spacing">Paste live note</div>
+                  <textarea
+                    name="canonical_note_text"
+                    class="admin-textarea trainer-shorthand-textarea"
+                    rows="9"
+                    placeholder="Paste the live EMR note here. The app expects you to de-identify it first, then applies an extra PHI scrub pass before saving."
+                  ></textarea>
+                </div>
+                <div class="trainer-primary-actions">
+                  <button type="submit" class="primary-action">Save to Master Note Canon</button>
+                </div>
+              </form>
+
+              <div class="admin-table-wrap">
+                <table class="admin-table admin-health-table">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Title</th>
+                      <th>Note type</th>
+                      <th>Category</th>
+                      <th>Source</th>
+                      <th>Master canon note</th>
+                      <th>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in canonical_notes %}
+                      <tr>
+                        <td>{{ row.created_at }}</td>
+                        <td>
+                          <div>{{ row.title or "Untitled canon note" }}</div>
+                          <div class="admin-table-note-meta">{{ row.editor_notes or "Master Note Canon entry" }}</div>
+                        </td>
+                        <td>{{ row.note_type.replace("_", " ").title() if row.note_type else "Unknown" }}</td>
+                        <td>{{ row.module_label or "Auto-categorized later" }}</td>
+                        <td>{{ row.source_label }}</td>
+                        <td class="admin-table-note">{{ row.note_preview }}</td>
+                        <td>
+                          <div class="admin-rating-badge {% if row.in_master_canon %}is-high{% else %}is-mid{% endif %}">
+                            {% if row.in_master_canon %}In canon{% else %}{{ row.status.replace("_", " ").title() }}{% endif %}
+                          </div>
+                        </td>
+                      </tr>
+                    {% else %}
+                      <tr>
+                        <td colspan="7" class="structured-empty">No master note canon entries saved yet.</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            {% elif selected_training_view == "sample_library" %}
+            <section class="admin-notes-card">
+              <div class="admin-section-head">
+                <div>
+                  <div class="card-label">Gold-standard examples</div>
+                  <p class="card-helper">Reference examples and canonical assets the team can review when calibrating style, structure, and note quality.</p>
+                </div>
+              </div>
+
+              <div class="admin-table-wrap">
+                <table class="admin-table admin-health-table">
+                  <thead>
+                    <tr>
+                      <th>When</th>
+                      <th>Example</th>
+                      <th>Procedure</th>
+                      <th>Tags</th>
+                      <th>Preview</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for row in gold_examples %}
+                      <tr>
+                        <td>{{ row.created_at }}</td>
+                        <td>{{ row.example_title }}</td>
+                        <td>{{ row.procedure or "Unknown" }}</td>
+                        <td>
+                          <div class="admin-live-signal-list">
+                            {% if row.tags %}
+                              {% for tag in row.tags.split(",") %}
+                                {% if tag.strip() %}
+                                  <span class="sample-tag-pill">{{ tag.strip() }}</span>
+                                {% endif %}
+                              {% endfor %}
+                            {% else %}
+                              <span class="admin-table-note-meta">No tags</span>
+                            {% endif %}
+                          </div>
+                        </td>
+                        <td class="admin-table-note">{{ row.example_preview }}</td>
+                      </tr>
+                    {% else %}
+                      <tr>
+                        <td colspan="5" class="structured-empty">No gold-standard examples saved yet.</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            {% elif selected_training_link %}
             <a href="{{ selected_training_link.destination_href }}" class="admin-guide-link-row is-active">
               <span class="admin-guide-link-label">{{ selected_training_link.label }}</span>
               <span class="admin-guide-link-meta">{{ selected_training_link.meta }}</span>
@@ -334,7 +476,7 @@
             <div class="trainer-workbench-header">
               <div>
                 <div class="card-label">Path 3</div>
-                <p class="card-helper">Model-generated scenario learning: create focused scenarios, route them through reviewers, and use the resulting corrections to raise model confidence where it is weak.</p>
+                <p class="card-helper">The system should surface the five highest-value questions it still wants answered today, then learn from the corrected responses.</p>
               </div>
               <div class="trainer-workbench-chip">Scenario learning loop</div>
             </div>
@@ -347,7 +489,77 @@
               {% endfor %}
             </div>
 
-            {% if selected_training_view == "trainer_roster" %}
+            {% if selected_training_view == "urgent_scenarios" %}
+            <section class="scenario-daily-shell">
+              <div class="scenario-daily-topbar">
+                <div>
+                  <div class="card-label">Daily urgent 5</div>
+                  <p class="card-helper">These are the five questions the model thinks will help most right now. Each one exists because SurgiNote still sees uncertainty in how it should write that note cleanly and accurately.</p>
+                </div>
+                <form method="POST" action="/admin/scenarios/refresh-urgent" class="scenario-daily-action">
+                  <button type="submit" class="secondary-action">Refresh today&apos;s 5</button>
+                </form>
+              </div>
+
+              {% if generated_error %}
+              <div class="feedback-status trainer-page-status is-error scenario-daily-status">{{ generated_error }}</div>
+              {% endif %}
+
+              <div class="scenario-daily-metrics">
+                <article class="scenario-daily-metric">
+                  <div class="card-label">Batch date</div>
+                  <div class="scenario-daily-metric-value">{{ scenario_batch_date or "Today" }}</div>
+                </article>
+                <article class="scenario-daily-metric">
+                  <div class="card-label">Questions live</div>
+                  <div class="scenario-daily-metric-value">{{ urgent_scenarios|length }}</div>
+                </article>
+                <article class="scenario-daily-metric">
+                  <div class="card-label">Review target</div>
+                  <div class="scenario-daily-metric-value">5/day</div>
+                </article>
+              </div>
+
+              <div class="admin-table-wrap">
+                <table class="admin-table admin-health-table scenario-daily-table">
+                  <thead>
+                    <tr>
+                      <th>Priority</th>
+                      <th>Domain</th>
+                      <th>The model is asking for</th>
+                      <th>Why now</th>
+                      <th>Review</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for scenario in urgent_scenarios %}
+                    <tr>
+                      <td>
+                        <div class="scenario-priority-pill">#{{ scenario.urgency_rank or loop.index }}</div>
+                      </td>
+                      <td>
+                        <div>{{ scenario.module_label or "General Surgery" }}</div>
+                        <div class="admin-table-note-meta">{{ scenario.note_type.replace("_", " ").title() }} · Level {{ scenario.next_target_level or scenario.complexity_level }}</div>
+                      </td>
+                      <td>
+                        <div class="scenario-daily-question">{{ scenario.question_prompt }}</div>
+                        <div class="admin-table-note-meta">{{ scenario.title }}</div>
+                      </td>
+                      <td class="admin-table-note">{{ scenario.why_now }}</td>
+                      <td class="admin-table-action-cell">
+                        <a href="/admin/scenarios/{{ scenario.id }}/review" class="admin-row-action-link">Open review</a>
+                      </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                      <td colspan="5" class="structured-empty">No daily urgent scenarios are ready yet.</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+            {% elif selected_training_view == "trainer_roster" %}
             {% include "_expert_roster_panel.html" %}
             {% elif selected_training_link %}
             <a href="{{ selected_training_link.destination_href }}" class="admin-guide-link-row is-active">
@@ -365,6 +577,56 @@
   </div>
 
 <script>
+  const trainerScrollStorageKey = "adminTrainerScrollY";
+
+  function restoreTrainerScrollPosition() {
+    const savedScrollY = sessionStorage.getItem(trainerScrollStorageKey);
+    if (!savedScrollY) return;
+    if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+    window.scrollTo({ top: Number(savedScrollY) || 0, left: 0, behavior: "auto" });
+    sessionStorage.removeItem(trainerScrollStorageKey);
+  }
+
+  function rememberTrainerScrollPosition() {
+    const trainerNavLinks = document.querySelectorAll(
+      '.trainer-path-tab[href^="/admin/trainer"], .admin-guide-link-row[href^="/admin/trainer"]'
+    );
+    trainerNavLinks.forEach((link) => {
+      link.addEventListener("click", () => {
+        sessionStorage.setItem(trainerScrollStorageKey, String(window.scrollY));
+      });
+    });
+  }
+
+  function enableDirectGuideNavigation() {
+    const directNavLinks = document.querySelectorAll('.admin-guide-link-row[data-direct-nav="1"]');
+    directNavLinks.forEach((link) => {
+      let navigating = false;
+      const navigate = () => {
+        const href = link.getAttribute("href");
+        if (!href || navigating) return;
+        navigating = true;
+        window.location.assign(href);
+      };
+
+      link.addEventListener("click", (event) => {
+        event.preventDefault();
+        navigate();
+      });
+
+      link.addEventListener("pointerup", (event) => {
+        if (event.pointerType === "touch") {
+          event.preventDefault();
+          navigate();
+        }
+      });
+    });
+  }
+
+  restoreTrainerScrollPosition();
+  rememberTrainerScrollPosition();
+  enableDirectGuideNavigation();
+
   window.__TRAINING_PREFILL__ = {{ prefill_feedback|tojson }};
   const specialtyEl = document.getElementById("trainingSpecialty");
   const noteTypeEl = document.getElementById("trainingNoteType");
@@ -372,6 +634,8 @@
   const shorthandEl = document.getElementById("trainingShorthand");
   const generatedDraftEl = document.getElementById("trainingGeneratedDraft");
   const acceptedAssumptionsEl = document.getElementById("trainingAcceptedAssumptions");
+  const draftWrapEl = document.getElementById("trainingDraftWrap");
+  const draftLoadingEl = document.getElementById("trainingDraftLoading");
   const draftTextEl = document.getElementById("trainingDraftText");
   const consultDraftEl = document.getElementById("trainingConsultDraft");
   const draftEmptyEl = document.getElementById("trainingDraftEmpty");
@@ -383,10 +647,12 @@
   const diffEmptyEl = document.getElementById("trainingDiffEmpty");
   const statusEl = document.getElementById("trainingStatus");
   const issueTagsEl = document.getElementById("trainingIssueTags");
+  const lowRatingReasonEl = document.getElementById("trainingLowRatingReason");
   const editorNotesEl = document.getElementById("trainingEditorNotes");
   const generateDraftBtn = document.getElementById("generateTrainingDraftBtn");
   const clearDraftBtn = document.getElementById("clearTrainingDraftBtn");
   const saveTrainingBtn = document.getElementById("saveTrainingExampleBtn");
+  const inMasterCanonEl = document.getElementById("trainingInMasterCanon");
   const draftStatusEl = document.getElementById("trainingDraftStatus");
   const saveStatusEl = document.getElementById("trainingSaveStatus");
   const trainingPrefill = window.__TRAINING_PREFILL__ || null;
@@ -396,6 +662,8 @@
   let activeTrainerAssumptionEl = null;
   let trainerAssumptionHideTimeout = null;
   let trainerAcceptedAssumptionValues = [];
+  let trainerRevisionSeededFromDraft = !correctedOutputEl || !correctedOutputEl.value.trim();
+  let trainerLoadingMessageInterval = null;
 
   function escapeHtml(value) {
     return String(value || "")
@@ -438,10 +706,14 @@
   }
 
   function decorateConsultHtml(html) {
-    return html.replace(
+    const withSectionGaps = html.replace(/(<br><br>)/g, '<br><span class="consult-section-gap"></span>');
+    if (withSectionGaps.includes("consult-heading")) {
+      return withSectionGaps;
+    }
+    return withSectionGaps.replace(
       /(^|<br>)((?:Reason for Consult|HPI|Past Medical History|Medical History|Past Surgical History|Surgical History|Family History|Social History|Review of Systems|ROS|Objective|Assessment and Plan):?)(?=<br>|$)/g,
       '$1<span class="consult-heading">$2</span>'
-    ).replace(/(<br><br>)/g, '<br><span class="consult-section-gap"></span>');
+    );
   }
 
   function buildFallbackAssumptionPatterns(caseFacts) {
@@ -541,6 +813,45 @@
       }
     });
     acceptedAssumptionsEl.value = JSON.stringify(accepted);
+  }
+
+  function stopTrainerDraftLoading() {
+    if (trainerLoadingMessageInterval) {
+      clearInterval(trainerLoadingMessageInterval);
+      trainerLoadingMessageInterval = null;
+    }
+    if (draftWrapEl) draftWrapEl.classList.remove("output-loading");
+    if (draftLoadingEl) draftLoadingEl.classList.add("hidden");
+  }
+
+  function startTrainerDraftLoading() {
+    if (!draftLoadingEl) return;
+    const messages = [
+      "Anesthesia delay.",
+      "Waiting for the OR to turn over.",
+      "Surgery running behind.",
+      "Consent still being witnessed.",
+      "Closing skin. Almost there.",
+    ];
+    const subtextEl = draftLoadingEl.querySelector(".generating-status-subtext");
+    let messageIndex = 0;
+
+    if (draftWrapEl) draftWrapEl.classList.add("output-loading");
+    draftLoadingEl.classList.remove("hidden");
+    if (subtextEl) {
+      subtextEl.textContent = messages[0];
+    }
+
+    if (trainerLoadingMessageInterval) {
+      clearInterval(trainerLoadingMessageInterval);
+    }
+
+    trainerLoadingMessageInterval = window.setInterval(() => {
+      messageIndex = (messageIndex + 1) % messages.length;
+      if (subtextEl) {
+        subtextEl.textContent = messages[messageIndex];
+      }
+    }, 2200);
   }
 
   function syncTrainerDraftEmptyState(hasDraft) {
@@ -648,6 +959,18 @@
     renderTrainerDiffPreview();
   }
 
+  function buildTrainingEditorNotes() {
+    const lowRatingReason = (lowRatingReasonEl?.value || "").trim();
+    const editorNotes = (editorNotesEl?.value || "").trim();
+    if (lowRatingReason && editorNotes) {
+      return `Why this was low-rated: ${lowRatingReason}\n\nAdmin teaching note: ${editorNotes}`;
+    }
+    if (lowRatingReason) {
+      return `Why this was low-rated: ${lowRatingReason}`;
+    }
+    return editorNotes;
+  }
+
   async function generateTrainingDraft() {
     const shorthand = (shorthandEl.value || "").trim();
 
@@ -658,6 +981,7 @@
 
     generateDraftBtn.disabled = true;
     draftStatusEl.textContent = "Generating draft...";
+    startTrainerDraftLoading();
 
     try {
       const res = await fetch("/admin/generate-training-draft", {
@@ -695,19 +1019,24 @@
       } else {
         renderTrainerPlainDraft(data.note || "");
       }
-      correctedOutputEl.value = normalizeConsultDisplayText(stripConsultTags(data.note || ""));
-      draftStatusEl.textContent = "Draft generated.";
+      if (trainerRevisionSeededFromDraft || !correctedOutputEl.value.trim()) {
+        correctedOutputEl.value = normalizeConsultDisplayText(stripConsultTags(data.note || ""));
+        trainerRevisionSeededFromDraft = true;
+      }
+      draftStatusEl.textContent = "Draft ready. Revise it with tracked changes below.";
       console.info("SurgiNote training draft timings", data.timings || {});
     } catch (err) {
       console.error(err);
       draftStatusEl.textContent = "Network or server error.";
     } finally {
+      stopTrainerDraftLoading();
       generateDraftBtn.disabled = false;
     }
   }
 
   async function saveTrainingExample() {
     const payload = {
+      feedback_id: trainingPrefill?.id || null,
       specialty: specialtyEl.value.trim(),
       note_type: noteTypeEl.value,
       title: titleEl.value.trim(),
@@ -716,15 +1045,21 @@
       corrected_output: correctedOutputEl.value.trim(),
       status: statusEl.value,
       issue_tags: issueTagsEl.value.split(",").map(x => x.trim()).filter(Boolean),
-      editor_notes: editorNotesEl.value.trim(),
-      accepted_assumptions_json: acceptedAssumptionsEl.value || "[]"
+      editor_notes: buildTrainingEditorNotes(),
+      accepted_assumptions_json: acceptedAssumptionsEl.value || "[]",
+      module_key: trainingPrefill?.module_key || null,
+      in_master_canon: Boolean(inMasterCanonEl?.checked)
     };
 
     saveTrainingBtn.disabled = true;
     saveStatusEl.textContent = "Saving...";
 
     try {
-      const res = await fetch("/admin/save-training-example", {
+      const saveUrl = payload.in_master_canon && payload.feedback_id
+        ? `/admin/training-examples/${payload.feedback_id}/promote-to-canon`
+        : "/admin/save-training-example";
+
+      const res = await fetch(saveUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
@@ -736,7 +1071,9 @@
         return;
       }
 
-      saveStatusEl.textContent = "Saved training example.";
+      saveStatusEl.textContent = payload.in_master_canon
+        ? "Saved to Master Note Canon."
+        : "Saved training example.";
       titleEl.value = "";
       shorthandEl.value = "";
       generatedDraftEl.value = "";
@@ -744,6 +1081,7 @@
       currentTrainerSegments = [];
       trainingCaseFacts = null;
       trainerAcceptedAssumptionValues = [];
+      trainerRevisionSeededFromDraft = true;
       correctedOutputEl.value = "";
       draftTextEl.value = "";
       consultDraftEl.innerHTML = "";
@@ -752,8 +1090,10 @@
       syncTrainerDraftEmptyState(false);
       renderTrainerDiffPreview();
       issueTagsEl.value = "";
+      if (lowRatingReasonEl) lowRatingReasonEl.value = "";
       editorNotesEl.value = "";
       statusEl.value = "approved";
+      if (inMasterCanonEl) inMasterCanonEl.checked = false;
     } catch (err) {
       console.error(err);
       saveStatusEl.textContent = "Network or server error.";
@@ -762,9 +1102,15 @@
     }
   }
 
-  if (generateDraftBtn && saveTrainingBtn && clearDraftBtn) {
+  if (generateDraftBtn) {
     generateDraftBtn.addEventListener("click", generateTrainingDraft);
+  }
+
+  if (saveTrainingBtn) {
     saveTrainingBtn.addEventListener("click", saveTrainingExample);
+  }
+
+  if (clearDraftBtn) {
     clearDraftBtn.addEventListener("click", () => {
       titleEl.value = "";
       shorthandEl.value = "";
@@ -773,6 +1119,7 @@
       currentTrainerSegments = [];
       trainingCaseFacts = null;
       trainerAcceptedAssumptionValues = [];
+      trainerRevisionSeededFromDraft = true;
       correctedOutputEl.value = "";
       draftTextEl.value = "";
       consultDraftEl.innerHTML = "";
@@ -781,14 +1128,19 @@
       syncTrainerDraftEmptyState(false);
       renderTrainerDiffPreview();
       issueTagsEl.value = "";
+      if (lowRatingReasonEl) lowRatingReasonEl.value = "";
       editorNotesEl.value = "";
       draftStatusEl.textContent = "";
       saveStatusEl.textContent = "";
+      if (inMasterCanonEl) inMasterCanonEl.checked = false;
     });
   }
 
   if (correctedOutputEl) {
-    correctedOutputEl.addEventListener("input", renderTrainerDiffPreview);
+    correctedOutputEl.addEventListener("input", () => {
+      trainerRevisionSeededFromDraft = false;
+      renderTrainerDiffPreview();
+    });
   }
 
   if (consultDraftEl && assumptionPopoverEl) {
@@ -864,6 +1216,7 @@
       renderTrainerPlainDraft(trainingPrefill.generated_note || "");
     }
     correctedOutputEl.value = normalizeConsultDisplayText(stripConsultTags(trainingPrefill.generated_note || ""));
+    trainerRevisionSeededFromDraft = true;
     editorNotesEl.value = trainingPrefill.comment || "";
     renderTrainerDiffPreview();
     saveStatusEl.textContent = "Loaded from rated live note.";

@@ -110,6 +110,19 @@ Demo
 </div>
 
 </div>
+
+<section class="app-card recent-notes-card">
+<div class="recent-notes-header">
+<div>
+<div class="card-label">Recent notes</div>
+</div>
+</div>
+
+<div id="recentNotesList" class="recent-notes-list"></div>
+<div id="recentNotesEmpty" class="recent-notes-empty">
+No saved drafts yet. Your five most recent notes will show up here after you generate them.
+</div>
+</section>
 </div>
 
 <div class="app-right-column">
@@ -125,9 +138,6 @@ Generated Consult Note
 <p class="card-helper subtle-light">
 Review and edit before use.
 </p>
-<p class="card-helper subtle-light">
-Drafts are de-identified. Use client-side merge to insert PHI locally before finalizing.
-</p>
 <div id="outputTemplateRuntime" class="template-runtime-row hidden template-runtime-row-output">
   <span id="outputTemplateRuntimeLabel" class="template-runtime-label"></span>
   <div id="outputTemplateRuntimePills" class="template-runtime-pills"></div>
@@ -135,24 +145,32 @@ Drafts are de-identified. Use client-side merge to insert PHI locally before fin
 </div>
 
 <div class="output-actions">
-<button id="copyBtn" class="secondary-action">
-Copy
-</button>
-<button id="emailBtn" class="secondary-action">
-Email draft
+<button id="copyBtn" class="copy-action-button" data-default-label="Copy note">
+<span class="copy-action-label">Copy note</span>
 </button>
 </div>
 
+</div>
+
+<div class="output-editor-chrome">
+<div id="outputFormattingToolbar" class="rich-editor-toolbar output-rich-toolbar"></div>
 </div>
 
 <div id="outputWrap" class="output-wrap">
-<div id="consultOutput" class="consult-output hidden"></div>
+<div id="consultOutput" class="consult-output hidden" contenteditable="true" spellcheck="false"></div>
+<div id="richOutput" class="rich-output hidden" contenteditable="true" spellcheck="false"></div>
 <textarea id="output" class="app-output-text" rows="22"></textarea>
 <div id="generatingStatus" class="generating-status hidden" aria-live="polite">
 <div class="generating-status-spinner"></div>
 <div id="generatingStatusText" class="generating-status-text">Generating note...</div>
 <div id="generatingStatusSubtext" class="generating-status-subtext">Anesthesia delay.</div>
 </div>
+</div>
+
+<div class="output-footer-actions">
+<button id="copyBtnBottom" class="copy-action-button copy-action-button-bottom" data-default-label="Copy note">
+<span class="copy-action-label">Copy note</span>
+</button>
 </div>
 
 </div>
@@ -162,6 +180,24 @@ Email draft
 </section>
 
 </main>
+
+<div id="onboardingModal" class="template-modal-overlay feedback-modal-overlay{% if not show_onboarding %} hidden{% endif %}" aria-hidden="{{ 'false' if show_onboarding else 'true' }}">
+<div class="template-modal-card onboarding-modal-card" role="dialog" aria-modal="true" aria-labelledby="onboardingModalTitle">
+<div class="card-label onboarding-modal-label">First-time setup</div>
+<h2 id="onboardingModalTitle" class="onboarding-modal-title">How do you want to start?</h2>
+<p class="onboarding-modal-copy">You can jump straight into making notes, or set up templates first so SurgiNote starts with your formatting preferences.</p>
+<div class="onboarding-modal-actions">
+<button type="button" id="onboardingStartBtn" class="onboarding-choice onboarding-choice-primary">
+<span class="onboarding-choice-title">Start making notes</span>
+<span class="onboarding-choice-copy">Open the note builder and begin right away.</span>
+</button>
+<button type="button" id="onboardingTemplatesBtn" class="onboarding-choice onboarding-choice-secondary">
+<span class="onboarding-choice-title">Set up templates</span>
+<span class="onboarding-choice-copy">Build formatting defaults before your first note.</span>
+</button>
+</div>
+</div>
+</div>
 
 <div id="ratingModal" class="rating-modal hidden" aria-hidden="true">
 <div id="ratingModalBackdrop" class="rating-modal-backdrop"></div>
@@ -199,7 +235,9 @@ Email draft
 <script>
 window.__APP_STATE__ = {
   initialNoteType: {{ initial_note_type|tojson }},
-  activeTemplateSummary: {{ active_template_summary|tojson }}
+  activeTemplateSummary: {{ active_template_summary|tojson }},
+  outputTypography: {{ output_typography|tojson }},
+  showOnboarding: {{ show_onboarding|tojson }}
 };
 </script>
 <script type="module" src="/static/app.js"></script>

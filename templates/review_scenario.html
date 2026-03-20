@@ -16,7 +16,7 @@
         <div class="review-scenario-hero-copy">
           <div class="sample-library-procedure">{{ scenario["specialty"] }} · {{ scenario["note_type"].replace("_", " ").title() }}</div>
           <h1 class="review-scenario-title">{{ scenario["title"] }}</h1>
-          <p class="card-helper">Translate the case into surgeon shorthand, generate a draft, cross out what does not belong, then explain what feels off. The system will store both the corrected output and the reviewer lessons.</p>
+          <p class="card-helper">{{ scenario["question_prompt"] }}</p>
         </div>
         <div class="review-scenario-badges">
           {% if scenario["module_label"] %}
@@ -31,6 +31,8 @@
       <section class="review-scenario-layout">
         <div class="review-scenario-main">
           <section class="app-card review-scenario-context-card">
+            <div class="card-label">Why the model wants this answered</div>
+            <p class="card-helper review-scenario-why-now">{{ scenario["why_now"] }}</p>
             <div class="card-label">Scenario</div>
             <div class="scenario-brief scenario-brief-detailed">{{ scenario["display_brief"] }}</div>
 
@@ -71,8 +73,8 @@
               <div class="trainer-shorthand-section">
                 <div class="trainer-section-head">
                   <div>
-                    <div class="card-label">Your shorthand</div>
-                    <p class="card-helper">Write the case the way a surgeon would actually type it under time pressure.</p>
+                      <div class="card-label">Your shorthand</div>
+                      <p class="card-helper">Answer the model in concise surgeon shorthand, then revise the generated draft until it is exactly what SurgiNote should learn from.</p>
                   </div>
                 </div>
 

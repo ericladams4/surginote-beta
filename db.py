@@ -6,8 +6,11 @@ DB_PATH = BASE_DIR / "surginote.db"
 
 
 def get_conn():
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(DB_PATH, timeout=30)
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 30000")
+    conn.execute("PRAGMA synchronous = NORMAL")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
@@ -126,6 +129,11 @@ def init_db():
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     )
     """)
+
+    ensure_column(cur, "template_profiles", "strict_template_html", "strict_template_html TEXT")
+    ensure_column(cur, "template_profiles", "style_example_html", "style_example_html TEXT")
+    ensure_column(cur, "template_profiles", "output_font_family", "output_font_family TEXT")
+    ensure_column(cur, "template_profiles", "output_font_size", "output_font_size TEXT")
 
     cur.execute("""
     CREATE INDEX IF NOT EXISTS idx_template_profiles_user_note_type

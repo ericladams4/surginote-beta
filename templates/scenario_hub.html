@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SurgiNote Admin - Urgent Learning Scenarios</title>
+  <title>SurgiNote Admin - Daily Urgent 5</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body class="app-page">
@@ -12,162 +12,84 @@
 
       {% include "_admin_header.html" %}
 
-      <section class="app-card admin-console-header">
-        <div>
-          <div class="card-label">Model-generated scenarios to improve learning</div>
-          <h1 class="admin-console-title">Urgent learning scenario queue</h1>
-          <p class="card-helper admin-dashboard-helper">This queue stays focused on the five scenarios most likely to improve confidence next, based on weak live-score patterns and curriculum pressure.</p>
+      <section class="app-card trainer-workbench">
+        <div class="trainer-workbench-header">
+          <div>
+            <div class="card-label">Path 3</div>
+            <h1 class="admin-console-title">Daily urgent 5</h1>
+            <p class="card-helper">Review the five highest-priority scenario questions the model still needs answered today, then open a scenario workbench to correct them.</p>
+          </div>
+          <div class="trainer-workbench-chip">Scenario learning loop</div>
         </div>
-        <div class="trainer-toolbar-links admin-console-links">
-          <a href="/admin/sample-library" class="trainer-toolbar-link">Sample library</a>
-          <a href="/admin/trainers" class="trainer-toolbar-link">Expert roster</a>
-        </div>
-      </section>
 
-      <section class="app-card admin-metrics-strip">
-        <div class="admin-metric">
-          <div class="card-label">Modules</div>
-          <div class="admin-metric-value">{{ curriculum_modules|length }}</div>
+        <div class="scenario-daily-topbar">
+          <div>
+            <div class="card-label">Today&apos;s queue</div>
+            <p class="card-helper">The table below is the admin queue for daily scenario review.</p>
+          </div>
+          <form method="POST" action="/admin/scenarios/refresh-urgent" class="scenario-daily-action">
+            <button type="submit" class="secondary-action">Refresh today&apos;s 5</button>
+          </form>
         </div>
-        <div class="admin-metric">
-          <div class="card-label">Urgent scenarios</div>
-          <div class="admin-metric-value">{{ summary["scenario_count"] or 0 }}</div>
-        </div>
-        <div class="admin-metric">
-          <div class="card-label">Reviews</div>
-          <div class="admin-metric-value">{{ summary["total_reviews"] or 0 }}</div>
-        </div>
-        <div class="admin-metric">
-          <div class="card-label">Confidence</div>
-          <div class="admin-metric-value">{{ ((summary["avg_confidence"] or 0) * 100) | round(0) }}%</div>
-        </div>
-      </section>
 
-      <section class="app-card scenario-controls-card">
-        {% if request.args.get("generate_error") %}
-          <div class="feedback-status scenario-feedback-row">{{ request.args.get("generate_error") }}</div>
+        {% if generated_error %}
+        <div class="feedback-status trainer-page-status is-error scenario-daily-status">{{ generated_error }}</div>
         {% elif request.args.get("generated") %}
-          <div class="feedback-status scenario-feedback-row">Generated {{ request.args.get("generated") }} new AI-authored scenarios.</div>
-        {% elif request.args.get("refreshed") %}
-          <div class="feedback-status scenario-feedback-row">Refreshed {{ request.args.get("refreshed") }} existing catalog scenarios with richer case detail.</div>
-        {% elif request.args.get("seeded") %}
-          <div class="feedback-status scenario-feedback-row">Seeded {{ request.args.get("seeded") }} missing catalog scenarios.</div>
+        <div class="feedback-status trainer-page-status is-success scenario-daily-status">Generated {{ request.args.get("generated") }} fresh daily scenario questions.</div>
         {% endif %}
 
-        <form method="GET" class="sample-filter-row scenario-filter-row scenario-filter-row-compact">
-          <select name="module" class="app-select sample-filter-select">
-            <option value="">All modules</option>
-            {% for module in curriculum_modules %}
-              <option value="{{ module['key'] }}" {% if selected_module == module['key'] %}selected{% endif %}>{{ module['rank'] }}. {{ module['label'] }}</option>
-            {% endfor %}
-          </select>
-
-          <select name="note_type" class="app-select sample-filter-select">
-            <option value="">All note types</option>
-            <option value="consult_note" {% if selected_note_type == "consult_note" %}selected{% endif %}>Consult Note</option>
-            <option value="clinic_note" {% if selected_note_type == "clinic_note" %}selected{% endif %}>Clinic Note</option>
-            <option value="op_note" {% if selected_note_type == "op_note" %}selected{% endif %}>Op Note</option>
-          </select>
-
-          <select name="level" class="app-select sample-filter-select">
-            <option value="">All target levels</option>
-            <option value="1" {% if selected_level == "1" %}selected{% endif %}>Level 1</option>
-            <option value="2" {% if selected_level == "2" %}selected{% endif %}>Level 2</option>
-            <option value="3" {% if selected_level == "3" %}selected{% endif %}>Level 3</option>
-          </select>
-
-          <button type="submit" class="secondary-action sample-filter-button">Filter</button>
-        </form>
-
-        <div class="scenario-generation-row scenario-generation-row-compact">
-          <form method="POST" action="/admin/scenarios/generate" class="scenario-generate-form">
-            <div class="scenario-generate-top">
-          <div class="card-label">Refresh the urgent 5</div>
-            </div>
-            <div class="scenario-generate-grid scenario-generate-grid-compact">
-              <select name="module_key" class="app-select sample-filter-select">
-                {% for module in curriculum_modules %}
-                  <option value="{{ module['key'] }}" {% if selected_module == module['key'] %}selected{% endif %}>{{ module['label'] }}</option>
-                {% endfor %}
-              </select>
-
-              <select name="target_level" class="app-select sample-filter-select">
-                <option value="1" {% if selected_level == "1" or not selected_level %}selected{% endif %}>Generate Level 1 cases</option>
-                <option value="2" {% if selected_level == "2" %}selected{% endif %}>Generate Level 2 cases</option>
-                <option value="3" {% if selected_level == "3" %}selected{% endif %}>Generate Level 3 cases</option>
-              </select>
-
-              <select name="count" class="app-select sample-filter-select">
-                <option value="5" selected>5 scenarios</option>
-              </select>
-
-              <input
-                name="focus"
-                class="admin-input"
-                placeholder="Optional wrinkle, e.g. overnight admit, outside CT, mild obesity"
-              />
-
-              <button type="submit" class="primary-action scenario-generate-button">Generate custom scenarios</button>
-            </div>
-          </form>
-          <form method="POST" action="/admin/scenarios/refresh-urgent" class="scenario-seed-form-inline">
-            <button type="submit" class="trainer-toolbar-link scenario-seed-link">Refresh urgent 5 from live scores</button>
-          </form>
+        <div class="scenario-daily-metrics">
+          <article class="scenario-daily-metric">
+            <div class="card-label">Batch date</div>
+            <div class="scenario-daily-metric-value">{{ scenario_batch_date or "Today" }}</div>
+          </article>
+          <article class="scenario-daily-metric">
+            <div class="card-label">Questions live</div>
+            <div class="scenario-daily-metric-value">{{ scenarios|length }}</div>
+          </article>
+          <article class="scenario-daily-metric">
+            <div class="card-label">Review target</div>
+            <div class="scenario-daily-metric-value">5/day</div>
+          </article>
         </div>
-      </section>
 
-      <section class="scenario-board">
-        <div class="app-card scenario-coverage-card">
-          <div class="card-label">Pressure by module</div>
-          {% if module_rows and module_rows|length > 0 %}
-            <div class="scenario-coverage-list">
-              {% for row in module_rows %}
-                <div class="scenario-coverage-row">
-                  <div class="scenario-coverage-title">
-                    <div class="scenario-coverage-specialty">{{ row["rank"] }}. {{ row["label"] }}</div>
-                  </div>
-                  <div class="scenario-coverage-metrics">
-                    <span>{{ row["scenario_count"] }} scenarios</span>
-                    <span>{{ row["total_reviews"] or 0 }} reviews</span>
-                    <span>{{ ((row["avg_confidence"] or 0) * 100) | round(0) }}% confidence</span>
-                  </div>
-                </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table admin-health-table scenario-daily-table">
+            <thead>
+              <tr>
+                <th>Priority</th>
+                <th>Domain</th>
+                <th>The model is asking for</th>
+                <th>Why now</th>
+                <th>Review</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for scenario in scenarios %}
+              <tr>
+                <td>
+                  <div class="scenario-priority-pill">#{{ scenario["urgency_rank"] or loop.index }}</div>
+                </td>
+                <td>
+                  <div>{{ scenario["module_label"] or "General Surgery" }}</div>
+                  <div class="admin-table-note-meta">{{ scenario["note_type"].replace("_", " ").title() }} · Level {{ scenario["next_target_level"] or scenario["complexity_level"] }}</div>
+                </td>
+                <td>
+                  <div class="scenario-daily-question">{{ scenario["question_prompt"] }}</div>
+                  <div class="admin-table-note-meta">{{ scenario["title"] }}</div>
+                </td>
+                <td class="admin-table-note">{{ scenario["why_now"] }}</td>
+                <td class="admin-table-action-cell">
+                  <a href="/admin/scenarios/{{ scenario['id'] }}/review" class="admin-row-action-link">Open review</a>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="5" class="structured-empty">No daily urgent scenarios are ready yet.</td>
+              </tr>
               {% endfor %}
-            </div>
-          {% else %}
-            <div class="structured-empty">No urgent scenario pressure has been generated yet.</div>
-          {% endif %}
-        </div>
-
-        <div class="scenario-queue-list">
-          {% if scenarios and scenarios|length > 0 %}
-            {% for scenario in scenarios %}
-              <article class="app-card scenario-queue-card">
-                <div class="scenario-queue-top">
-                  <div>
-                    <div class="sample-library-procedure">{{ scenario["module_label"] or scenario["specialty"] }}</div>
-                    <h2 class="sample-library-title scenario-queue-title">{{ scenario["title"] }}</h2>
-                  </div>
-                  <div class="scenario-confidence-pill">{{ ((scenario["model_confidence"] or 0) * 100) | round(0) }}%</div>
-                </div>
-
-                <div class="sample-library-tags-row scenario-tag-row">
-                  <span class="sample-tag-pill">{{ scenario["note_type"].replace("_", " ").title() }}</span>
-                  <span class="sample-tag-pill">L{{ scenario["complexity_level"] }}</span>
-                  <span class="sample-tag-pill">{{ scenario["review_count"] or 0 }} reviews</span>
-                </div>
-
-                <div class="scenario-brief scenario-brief-compact">{{ scenario["display_brief"] }}</div>
-
-                <div class="scenario-queue-footer">
-                  <div class="scenario-queue-status">Target level {{ scenario["next_target_level"] }}</div>
-                  <a href="/admin/scenarios/{{ scenario['id'] }}/review" class="primary-action">Open review workbench</a>
-                </div>
-              </article>
-            {% endfor %}
-          {% else %}
-            <div class="app-card structured-empty">No urgent scenarios match the current filters.</div>
-          {% endif %}
+            </tbody>
+          </table>
         </div>
       </section>
 

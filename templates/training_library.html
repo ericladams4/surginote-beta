@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>SurgiNote Admin - Training Library</title>
+  <title>SurgiNote Admin - Master Note Canon</title>
   <link rel="stylesheet" href="/static/style.css" />
 </head>
 <body class="app-page">
@@ -13,7 +13,7 @@
       {% include "_admin_header.html" %}
 
       <section class="app-card sample-library-shell">
-        <div class="card-label">Training library</div>
+        <div class="card-label">Master note canon</div>
 
         <form method="GET" class="sample-filter-row training-filter-row">
           <select name="specialty" class="app-select sample-filter-select">
@@ -47,77 +47,78 @@
         </form>
 
         {% if training_examples and training_examples|length > 0 %}
-          <div class="sample-library-list">
-            {% for row in training_examples %}
-              <article class="sample-library-card">
-
-                <div class="sample-library-top">
-                  <div class="sample-library-top-left">
-                    <div class="sample-library-procedure">{{ row["specialty"] }}</div>
-                    <h2 class="sample-library-title">
-                      {{ row["title"] if row["title"] else "Untitled training example" }}
-                    </h2>
-                  </div>
-
-                  <div class="sample-library-top-right">
-                    <div class="sample-library-date">{{ row["updated_at"] }}</div>
-                  </div>
-                </div>
-
-                <div class="sample-library-tags-row">
-                  <span class="sample-tag-pill">{{ row["note_type"].replace("_", " ").title() }}</span>
-                  <span class="sample-tag-pill">{{ row["status"].replace("_", " ").title() }}</span>
-                  {% if row["issue_tags"] %}
-                    {% for tag in row["issue_tags"].split(",") %}
-                      {% if tag.strip() %}
-                        <span class="sample-tag-pill">{{ tag.strip() }}</span>
+          <div class="admin-table-wrap canon-databank-wrap">
+            <table class="admin-table admin-health-table canon-databank-table">
+              <thead>
+                <tr>
+                  <th>Profile</th>
+                  <th>Type</th>
+                  <th>Module</th>
+                  <th>Source</th>
+                  <th>Shorthand</th>
+                  <th>Gold output</th>
+                  <th>Signals</th>
+                  <th>Updated</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for row in training_examples %}
+                  <tr>
+                    <td class="canon-databank-primary">
+                      <div class="canon-databank-title">{{ row["title"] if row["title"] else "Untitled canon note" }}</div>
+                      <div class="admin-table-note-meta">{{ row["specialty"] or "General Surgery" }}</div>
+                      {% if row["editor_notes"] %}
+                        <div class="canon-databank-editor-note">{{ row["editor_notes"]|truncate(120, True) }}</div>
                       {% endif %}
-                    {% endfor %}
-                  {% endif %}
-                </div>
-
-                <div class="sample-library-actions">
-                  <a href="/admin/training-library/{{ row['id'] }}/edit" class="secondary-action admin-link-button">Edit</a>
-
-                  <form method="POST" action="/admin/training-library/{{ row['id'] }}/delete" class="inline-action-form" onsubmit="return confirm('Delete this training example?');">
-                    <button type="submit" class="secondary-action destructive-action">Delete</button>
-                  </form>
-                </div>
-
-                <div class="sample-library-columns training-library-columns">
-                  <section class="sample-library-panel">
-                    <div class="sample-panel-label">Shorthand input</div>
-                    <div class="sample-panel-body sample-panel-body-short">
-                      <pre class="sample-panel-pre">{{ row["shorthand_input"] }}</pre>
-                    </div>
-                  </section>
-
-                  <section class="sample-library-panel">
-                    <div class="sample-panel-label">Generated draft</div>
-                    <div class="sample-panel-body sample-panel-body-note">
-                      <pre class="sample-panel-pre">{{ row["generated_draft"] if row["generated_draft"] else "No draft stored." }}</pre>
-                    </div>
-                  </section>
-
-                  <section class="sample-library-panel">
-                    <div class="sample-panel-label">Corrected gold output</div>
-                    <div class="sample-panel-body sample-panel-body-note">
-                      <pre class="sample-panel-pre">{{ row["corrected_output"] }}</pre>
-                    </div>
-                  </section>
-                </div>
-
-                {% if row["editor_notes"] %}
-                  <div class="training-editor-notes">
-                    <div class="sample-panel-label">Editor notes</div>
-                    <div class="sample-panel-body">
-                      <pre class="sample-panel-pre">{{ row["editor_notes"] }}</pre>
-                    </div>
-                  </div>
-                {% endif %}
-
-              </article>
-            {% endfor %}
+                    </td>
+                    <td>
+                      <span class="sample-tag-pill">{{ row["note_type"].replace("_", " ").title() }}</span>
+                    </td>
+                    <td>
+                      <div>{{ row["module_label"] or "Auto-categorized later" }}</div>
+                    </td>
+                    <td>
+                      <div>{{ row["source_label"] }}</div>
+                      <div class="admin-table-note-meta">{{ row["created_by"] or "admin-team" }}</div>
+                    </td>
+                    <td class="canon-databank-preview-cell">
+                      <div class="canon-databank-preview">{{ row["shorthand_input"]|truncate(180, True) }}</div>
+                    </td>
+                    <td class="canon-databank-preview-cell">
+                      <div class="canon-databank-preview canon-databank-preview-gold">{{ row["corrected_output"]|truncate(260, True) }}</div>
+                    </td>
+                    <td>
+                      <div class="admin-live-signal-list canon-databank-signals">
+                        {% if row["in_master_canon"] %}
+                          <span class="admin-rating-badge is-high">Canon</span>
+                        {% endif %}
+                        <span class="admin-rating-badge {% if row['status'] == 'gold' %}is-high{% else %}is-mid{% endif %}">
+                          {{ row["status"].replace("_", " ").title() }}
+                        </span>
+                        {% if row["issue_tags"] %}
+                          {% for tag in row["issue_tags"].split(",") %}
+                            {% if tag.strip() %}
+                              <span class="sample-tag-pill">{{ tag.strip() }}</span>
+                            {% endif %}
+                          {% endfor %}
+                        {% endif %}
+                      </div>
+                    </td>
+                    <td class="canon-databank-updated">
+                      <div>{{ row["updated_at"] }}</div>
+                      <div class="admin-table-note-meta">{{ row["created_at"] }}</div>
+                    </td>
+                    <td class="admin-table-action-cell canon-databank-actions">
+                      <a href="/admin/training-library/{{ row['id'] }}/edit" class="admin-row-action-link">Edit</a>
+                      <form method="POST" action="/admin/training-library/{{ row['id'] }}/delete" class="inline-action-form" onsubmit="return confirm('Delete this training example?');">
+                        <button type="submit" class="admin-row-action-link admin-row-action-button expert-request-cancel-button">Delete</button>
+                      </form>
+                    </td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
           </div>
         {% else %}
           <div class="structured-empty">No training examples saved yet.</div>

@@ -1,0 +1,504 @@
+/* -------------------- Responsive -------------------- */
+
+@media (max-width: 1240px) {
+  .admin-dashboard-analytics,
+  .admin-guide-grid,
+  .admin-domain-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-contribution-summary {
+    align-items: flex-start;
+    text-align: left;
+  }
+
+  .admin-notes-filter-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-user-access-form {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .admin-inline-toggle {
+    grid-column: 1 / -1;
+  }
+
+  .admin-metrics-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .templates-page-grid,
+  .feedback-page-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .templates-magic-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scenario-generate-grid,
+  .scenario-generate-grid-compact {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .scenario-board,
+  .review-scenario-layout,
+  .review-scenario-footer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scenario-generation-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .review-scenario-badges,
+  .scenario-seed-form {
+    justify-content: flex-start;
+  }
+
+  .trainer-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .trainer-toolbar-links {
+    justify-content: flex-start;
+  }
+
+  .trainer-control-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .trainer-control-wide {
+    grid-column: 1 / -1;
+  }
+
+  .trainer-footer-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .trainer-save-panel {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    gap: 14px 18px;
+    align-items: center;
+  }
+
+  .trainer-save-panel .card-label,
+  .trainer-save-panel .card-helper {
+    grid-column: 1;
+  }
+
+  .trainer-save-button,
+  .trainer-save-panel .trainer-inline-status {
+    grid-column: 2;
+  }
+
+  .trainer-save-button {
+    margin-top: 0;
+  }
+
+  .trainer-save-panel .trainer-inline-status {
+    align-self: start;
+    text-align: left;
+  }
+}
+
+@media (max-width: 1100px) {
+  .app-shell {
+    padding: 24px 32px 40px;
+  }
+
+  .app-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .app-output-text {
+    min-height: 520px;
+  }
+
+  .sample-library-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .sample-panel-body-short,
+  .sample-panel-body-note {
+    max-height: 320px;
+  }
+
+  .training-library-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .templates-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .trainer-editor-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .trainer-editor-grid .training-output-textarea {
+    min-height: 360px;
+  }
+}
+
+@media (max-width: 1000px) {
+  .admin-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .login-shell-wide {
+    padding: 24px 20px 34px;
+  }
+
+  .login-topbar {
+    margin-bottom: 52px;
+  }
+
+  .login-topbar .brand-logo-white {
+    font-size: 34px;
+  }
+
+  .login-wide-card {
+    grid-template-columns: 1fr;
+    gap: 24px;
+    padding: 28px;
+  }
+
+  .login-divider {
+    display: none;
+  }
+
+  .legal-shell {
+    padding: 24px 20px 28px;
+  }
+
+  .legal-topbar {
+    margin-bottom: 24px;
+  }
+
+  .legal-card {
+    padding: 22px 18px;
+  }
+
+  .legal-title {
+    font-size: 34px;
+  }
+
+  .legal-section h2 {
+    font-size: 18px;
+  }
+
+  .legal-section p,
+  .legal-section li {
+    font-size: 14px;
+  }
+
+  .phone-login-card {
+    min-height: 0;
+    padding: 26px 16px;
+    border-radius: 28px;
+  }
+
+  .phone-entry-title {
+    font-size: clamp(24px, 8vw, 36px);
+  }
+
+  .phone-entry-subtitle {
+    font-size: 15px;
+    line-height: 1.32;
+    max-width: 19ch;
+  }
+
+  .phone-entry-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .phone-digit-layout {
+    width: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) auto minmax(0, 3fr) auto minmax(0, 4fr);
+    gap: 6px;
+    align-items: center;
+  }
+
+  .phone-digit-separator {
+    display: block;
+    justify-self: center;
+    font-size: 18px;
+    color: rgba(255,255,255,0.28);
+  }
+
+  .phone-digit-cluster,
+  .phone-digit-cluster-wide {
+    width: 100%;
+    gap: 6px;
+  }
+
+  .admin-user-access-form {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-access-role-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .admin-dashboard-header-metrics {
+    width: 100%;
+  }
+
+  .admin-dashboard-chip {
+    min-width: calc(50% - 6px);
+  }
+
+  .admin-notes-filter-row {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-access-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-user-access-actions {
+    justify-content: stretch;
+  }
+
+  .admin-user-access-actions .secondary-action {
+    width: 100%;
+  }
+
+  .app-shell {
+    padding: 20px 18px 28px;
+  }
+
+  .app-header {
+    margin-bottom: 22px;
+  }
+
+  .app-brand .brand-logo-white {
+    font-size: 32px;
+  }
+
+  .output-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .output-actions {
+    margin-left: 0;
+    padding-top: 0;
+  }
+
+  .app-output-text {
+    min-height: 420px;
+    font-size: 12px;
+  }
+
+  .app-shorthand {
+    min-height: 150px;
+    font-size: 14px;
+  }
+
+  .templates-page-title {
+    font-size: 30px;
+  }
+
+  .admin-section-head,
+  .admin-console-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .templates-section-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .templates-toggle-row {
+    min-height: auto;
+    padding: 12px 14px;
+  }
+
+  .login-shell {
+    padding: 24px 16px;
+  }
+
+  .login-brand {
+    font-size: 32px;
+  }
+
+  .login-title {
+    font-size: 28px;
+  }
+
+  .sample-filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .sample-filter-select {
+    max-width: none;
+  }
+
+  .sample-library-top {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .sample-library-title {
+    font-size: 20px;
+  }
+
+  .review-scenario-hero,
+  .scenario-queue-top,
+  .scenario-queue-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-console-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .admin-metrics-strip,
+  .scenario-generate-grid,
+  .scenario-generate-grid-compact {
+    grid-template-columns: 1fr;
+  }
+
+  .training-meta-grid,
+  .training-example-columns {
+    grid-template-columns: 1fr;
+  }
+
+  .trainer-control-strip,
+  .trainer-save-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .account-settings-form {
+    grid-template-columns: 1fr;
+  }
+
+  .account-settings-actions .primary-action,
+  .account-delete-form .destructive-action {
+    width: 100%;
+  }
+
+  .trainer-save-button,
+  .trainer-save-panel .trainer-inline-status {
+    grid-column: auto;
+  }
+
+  .trainer-primary-actions {
+    width: 100%;
+  }
+
+  .trainer-primary-actions .primary-action,
+  .trainer-primary-actions .outline-action {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .trainer-action-bar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .trainer-inline-status,
+  .trainer-save-panel .trainer-inline-status {
+    text-align: left;
+  }
+
+  .template-modal-overlay {
+    padding: 14px;
+    align-items: flex-start;
+  }
+
+  .template-modal-card {
+    margin-top: 24px;
+    padding: 18px;
+    max-height: calc(100vh - 48px);
+  }
+
+  .legal-topbar {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .phone-digit-layout {
+    gap: 5px;
+  }
+
+  .phone-digit-box {
+    height: 46px;
+    margin: 0;
+    padding: 0;
+    border-radius: 14px;
+    font-size: 21px;
+  }
+
+  .phone-country-select {
+    min-height: 50px;
+    margin: 0;
+    border-radius: 16px;
+    font-size: 15px;
+  }
+
+  .phone-entry-hero {
+    gap: 8px;
+  }
+
+  .phone-entry-eyebrow {
+    padding: 7px 12px;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+  }
+
+  .phone-login-inner {
+    gap: 18px;
+  }
+}
+
+@media (max-width: 430px) {
+  .phone-login-card {
+    padding: 22px 14px;
+  }
+
+  .phone-entry-title {
+    font-size: 22px;
+  }
+
+  .phone-entry-subtitle {
+    font-size: 14px;
+  }
+
+  .phone-digit-layout {
+    gap: 4px;
+  }
+
+  .phone-digit-cluster,
+  .phone-digit-cluster-wide {
+    gap: 4px;
+  }
+
+  .phone-digit-box {
+    height: 42px;
+    border-radius: 12px;
+    font-size: 19px;
+  }
+
+  .phone-digit-separator {
+    font-size: 15px;
+  }
+}

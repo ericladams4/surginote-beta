@@ -1,7 +1,7 @@
 {% if error %}
   <div class="feedback-status trainer-page-status">{{ error }}</div>
 {% elif created %}
-  <div class="feedback-status trainer-page-status">Expert request assigned.</div>
+  <div class="feedback-status trainer-page-status">{{ created if created is string else "Expert request assigned." }}</div>
 {% endif %}
 
 <section class="app-card trainer-workbench">
@@ -80,20 +80,42 @@
     </div>
   </div>
 
-  <div class="review-scenario-recent-list">
-    {% for expert in expert_users %}
-      <article class="review-scenario-recent-item trainer-roster-item">
-        <div class="review-scenario-recent-top">
-          <strong>{{ expert.display_name or (expert.phone or expert.email or ("User " ~ expert.id)) }}</strong>
-          <span>{{ expert.pending_request_count }} pending</span>
-        </div>
-        <div class="review-scenario-recent-meta">
-          {{ expert.phone or expert.email or "No phone on file" }} · {{ expert.submitted_request_count }} submitted, {{ expert.completed_request_count }} completed
-        </div>
-      </article>
-    {% else %}
-      <div class="structured-empty">Add a SurgiNote Expert from Admin Settings first.</div>
-    {% endfor %}
+  <div class="admin-table-wrap">
+    <table class="admin-table admin-health-table expert-roster-table">
+      <thead>
+        <tr>
+          <th>Expert</th>
+          <th>Contact</th>
+          <th>Activity</th>
+          <th>Queue</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for expert in expert_users %}
+          <tr>
+            <td>
+              <div>{{ expert.display_name or (expert.phone or expert.email or ("User " ~ expert.id)) }}</div>
+            </td>
+            <td>
+              <div>{{ expert.phone_display or expert.phone or expert.email or "No phone on file" }}</div>
+            </td>
+            <td>
+              <div>{{ expert.submitted_request_count }} submitted</div>
+              <div class="admin-table-note-meta">{{ expert.completed_request_count }} completed</div>
+            </td>
+            <td>
+              <div class="admin-rating-badge {% if expert.pending_request_count > 0 %}is-mid{% else %}is-high{% endif %}">
+                {{ expert.pending_request_count }} pending
+              </div>
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4" class="structured-empty">Add a SurgiNote Expert from Admin Settings first.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>
 
@@ -105,26 +127,61 @@
     </div>
   </div>
 
-  <div class="review-scenario-recent-list">
-    {% for item in expert_requests %}
-      <article class="review-scenario-recent-item trainer-roster-item">
-        <div class="review-scenario-recent-top">
-          <strong>{{ item.title }}</strong>
-          <span>{{ item.status.replace("_", " ").title() }}</span>
-        </div>
-        <div class="review-scenario-recent-meta">{{ item.expert_display_name or (item.expert_phone or item.expert_email or ("User " ~ item.expert_user_id)) }} · {{ item.expert_phone or item.expert_email or "No phone on file" }}</div>
-        <div class="sample-library-tags-row scenario-tag-row">
-          <span class="sample-tag-pill">{{ item.request_kind.replace("_", " ").title() }}</span>
-          <span class="sample-tag-pill">{{ item.note_type.replace("_", " ").title() }}</span>
-          {% if item.module_label %}<span class="sample-tag-pill">{{ item.module_label }}</span>{% endif %}
-        </div>
-        <div class="scenario-brief scenario-brief-compact">{{ item.request_brief }}</div>
-        {% if item.training_example_title %}
-          <div class="review-scenario-recent-meta">Captured in training library as: {{ item.training_example_title }}</div>
-        {% endif %}
-      </article>
-    {% else %}
-      <div class="structured-empty">No expert requests assigned yet.</div>
-    {% endfor %}
+  <div class="admin-table-wrap">
+    <table class="admin-table admin-health-table expert-roster-table expert-roster-request-table">
+      <thead>
+        <tr>
+          <th>Title</th>
+          <th>Assigned to</th>
+          <th>Request</th>
+          <th>Brief</th>
+          <th>Status</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in expert_requests %}
+          <tr>
+            <td>
+              <div>{{ item.title }}</div>
+              {% if item.training_example_title %}
+                <div class="admin-table-note-meta">Saved as {{ item.training_example_title }}</div>
+              {% endif %}
+            </td>
+            <td>
+              <div>{{ item.expert_display_name or (item.expert_phone or item.expert_email or ("User " ~ item.expert_user_id)) }}</div>
+              <div class="admin-table-note-meta">{{ item.expert_phone_display or item.expert_phone or item.expert_email or "No phone on file" }}</div>
+            </td>
+            <td>
+              <div class="admin-live-signal-list">
+                <span class="sample-tag-pill">{{ item.request_kind.replace("_", " ").title() }}</span>
+                <span class="sample-tag-pill">{{ item.note_type.replace("_", " ").title() }}</span>
+                {% if item.module_label %}<span class="sample-tag-pill">{{ item.module_label }}</span>{% endif %}
+              </div>
+            </td>
+            <td class="admin-table-note expert-request-brief-cell">{{ item.request_brief_preview }}</td>
+            <td>
+              <div class="admin-rating-badge {% if item.status == 'completed' %}is-high{% elif item.status == 'pending' %}is-mid{% else %}is-low{% endif %}">
+                {{ item.status.replace("_", " ").title() }}
+              </div>
+            </td>
+            <td class="admin-table-action-cell">
+              {% if item.status == "pending" %}
+                <form method="POST" action="/admin/trainers/requests/{{ item.id }}/cancel">
+                  {% if return_to_trainer_hub %}
+                    <input type="hidden" name="return_to" value="trainer_hub" />
+                  {% endif %}
+                  <button type="submit" class="admin-row-action-link expert-request-cancel-button">Cancel</button>
+                </form>
+              {% endif %}
+            </td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="6" class="structured-empty">No expert requests assigned yet.</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 </section>

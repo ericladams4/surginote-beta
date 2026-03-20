@@ -22,30 +22,13 @@
 
 <section class="templates-page-grid">
   <aside class="app-card templates-sidebar">
-    <div class="card-label">Template Workspace</div>
-    <h1 class="templates-page-title">Make output feel like your charting.</h1>
+    <div class="card-label">Saved Templates</div>
+    <h1 class="templates-page-title">AI template builder.</h1>
     <p class="card-helper templates-page-helper">
-      Use a strict template for exact format and must-copy wording, then layer a real de-identified example note for style, tone, and organization.
+      Build note-type-specific profiles like <em>robo chole</em>, <em>normal clinic note</em>, or <em>new patient</em>. SurgiNote recognizes when a profile fits the note type and case pattern, then applies it automatically.
     </p>
 
-    <div class="templates-type-toggle" role="tablist" aria-label="Note type">
-      {% for choice in note_type_choices %}
-      <button
-        type="button"
-        class="templates-type-pill{% if choice.value == selected_note_type %} is-active{% endif %}"
-        data-note-type="{{ choice.value }}"
-        role="tab"
-        aria-selected="{{ 'true' if choice.value == selected_note_type else 'false' }}"
-      >
-        {{ choice.label }}
-      </button>
-      {% endfor %}
-    </div>
-
-    <div class="templates-sidebar-row">
-      <div class="card-label">Saved Profiles</div>
-      <button type="button" id="newTemplateProfileBtn" class="templates-inline-button">New profile</button>
-    </div>
+    <div class="card-label">Saved Templates</div>
 
     <div id="templateProfileList" class="template-profile-list"></div>
   </aside>
@@ -53,96 +36,195 @@
   <section class="app-card templates-editor-card">
     <div class="templates-editor-header">
       <div>
-        <div class="card-label">Profile Editor</div>
+        <div class="card-label">AI Template Builder</div>
+        <h2 class="templates-builder-title">Build note-specific profiles and global tone separately.</h2>
         <p class="card-helper templates-editor-helper">
-          STRICT controls layout and exact reusable wording. Style learns your de-identified voice and defaults to on.
+          Create a profile for a specific note type, or switch to tone setup to teach SurgiNote your charting voice across all note types.
         </p>
       </div>
       <div id="templateWorkspaceStatus" class="feedback-status templates-status"></div>
     </div>
 
-    <div class="templates-editor-grid">
-      <label class="templates-field">
-        <span class="card-label">Profile Name</span>
-        <input id="templateProfileName" class="app-select templates-text-input" type="text" placeholder="e.g. Appy laparoscopic" />
-      </label>
-
-      <label class="templates-field templates-checkbox-field">
-        <span class="card-label">Default For Note Type</span>
-        <span class="templates-toggle-row">
-          <input id="templateProfileDefault" type="checkbox" />
-          <span class="templates-toggle-copy">Use this automatically when generating this note type.</span>
-        </span>
-      </label>
+    <div class="templates-workflow-nav-shell">
+      <div class="card-label">Workflow</div>
+      <div class="templates-workflow-nav">
+        <button type="button" class="templates-workflow-nav-item is-active" data-workflow-target="template">
+          <span class="templates-workflow-nav-title">Template Builder</span>
+          <span class="templates-workflow-nav-copy">Create note-type-specific profiles and submit them after highlighting.</span>
+        </button>
+        <button type="button" class="templates-workflow-nav-item" data-workflow-target="tone">
+          <span class="templates-workflow-nav-title">Set Up Tone</span>
+          <span class="templates-workflow-nav-copy">Teach SurgiNote your global charting voice separately from note templates.</span>
+        </button>
+      </div>
     </div>
 
-    <section class="templates-section-card">
-      <div class="templates-section-header">
-        <div>
-          <div class="card-label">STRICT Formatting Template</div>
-          <p class="card-helper">
-            Paste the exact shell from your EMR. This controls section order, formatting, and must-copy language.
-          </p>
+    <div class="templates-workflow-shell">
+      <div class="templates-workflow-main">
+        <div id="templateWorkflowPanel" class="templates-workflow-panel" data-workflow-panel="template">
+          <section class="templates-section-card templates-builder-card">
+            <div class="templates-section-header">
+              <div>
+                <div class="card-label">New Template / Profile</div>
+                <p class="card-helper">
+                  SurgiNote recognizes when this profile matches the selected note type and case context, then applies it automatically.
+                </p>
+              </div>
+            </div>
+
+            <div class="templates-editor-grid templates-builder-grid">
+              <label class="templates-field">
+                <span class="card-label">Note Type</span>
+                <div class="app-select-wrap note-type-select-wrap">
+                  <select id="templateProfileNoteType" class="app-select app-select-prominent app-select-native-hidden" aria-hidden="true" tabindex="-1">
+                    {% for choice in note_type_choices %}
+                    <option value="{{ choice.value }}"{% if choice.value == selected_note_type %} selected{% endif %}>{{ choice.label }}</option>
+                    {% endfor %}
+                  </select>
+                  <button
+                    type="button"
+                    id="templateNoteTypeTrigger"
+                    class="note-type-trigger"
+                    aria-haspopup="listbox"
+                    aria-expanded="false"
+                    aria-labelledby="templateNoteTypeLabelText"
+                  >
+                    <span id="templateNoteTypeLabelText" class="note-type-trigger-label">
+                      {% for choice in note_type_choices %}{% if choice.value == selected_note_type %}{{ choice.label }}{% endif %}{% endfor %}
+                    </span>
+                  </button>
+                  <div id="templateNoteTypeMenu" class="note-type-menu hidden" role="listbox" aria-label="Template note type">
+                    {% for choice in note_type_choices %}
+                    <button type="button" class="note-type-option template-note-type-option{% if choice.value == selected_note_type %} is-active{% endif %}" data-value="{{ choice.value }}" role="option" aria-selected="{{ 'true' if choice.value == selected_note_type else 'false' }}">
+                      <span class="note-type-option-title">{{ choice.label }}</span>
+                      <span class="note-type-option-detail">
+                        {% if choice.value == 'consult_note' %}Inpatient or ED surgical consults{% endif %}
+                        {% if choice.value == 'clinic_note' %}Office visits and follow-up notes{% endif %}
+                        {% if choice.value == 'op_note' %}Operative reports and procedures{% endif %}
+                      </span>
+                    </button>
+                    {% endfor %}
+                  </div>
+                </div>
+              </label>
+
+              <label class="templates-field">
+                <span class="card-label">Profile Name</span>
+                <input id="templateProfileName" class="app-select templates-text-input" type="text" placeholder="e.g. Robo chole / Normal clinic note / New patient" />
+              </label>
+
+            </div>
+          </section>
+
+          <section class="templates-section-card">
+            <div class="templates-section-header">
+              <div>
+                <div class="card-label">Format + Procedural Defaults</div>
+                <p class="card-helper">
+                  Paste the note shell, formatting structure, or procedural defaults for this profile, then mark what must stay exact versus what SurgiNote should recognize and apply as your usual style.
+                </p>
+              </div>
+            </div>
+
+            <div class="templates-rule-row">
+              <div class="templates-rule-chip templates-rule-chip-exact">Green = keep format / must-copy language exactly</div>
+              <div class="templates-rule-chip templates-rule-chip-guide">Purple = recognize this preference and apply it when appropriate</div>
+              <div class="templates-rule-chip">Good purple examples: usual tools, suture choice, routine operative steps, favorite structure.</div>
+            </div>
+
+            <div class="rich-editor-shell">
+              <div id="templateStrictToolbar" class="rich-editor-toolbar"></div>
+              <div
+                id="templateStrictEditor"
+                class="app-feedback-text templates-large-textarea templates-rich-editor"
+                contenteditable="true"
+                spellcheck="false"
+                data-placeholder="Paste a de-identified note or the template shell from your EMR for this profile. Then mark green for exact format / must-copy language and purple for operative steps, tools, sutures, or preferences SurgiNote should recognize and apply."
+              ></div>
+            </div>
+
+            <div class="card-action-row templates-editor-actions templates-editor-actions-end">
+              <button id="saveTemplateProfileBtn" class="primary-action">Submit profile</button>
+              <button id="deleteTemplateProfileBtn" class="secondary-action">Delete profile</button>
+            </div>
+          </section>
+
+          <section class="templates-magic-card">
+            <div class="card-label">How SurgiNote Uses This</div>
+            <div class="templates-magic-grid">
+              <div class="templates-magic-item">
+                <strong>EXACT</strong>
+                <span>Preserves format, headings, and any language you marked to keep exactly.</span>
+              </div>
+              <div class="templates-magic-item">
+                <strong>PREFERENCES</strong>
+                <span>Recognizes your usual operative steps, tools, sutures, and procedural quirks without forcing verbatim copy.</span>
+              </div>
+              <div class="templates-magic-item">
+                <strong>AUTO APPLY</strong>
+                <span>Matches the profile against note type and case context, then pulls it in automatically when it fits.</span>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div id="toneWorkflowPanel" class="templates-workflow-panel hidden" data-workflow-panel="tone">
+          <section class="templates-section-card">
+            <div class="templates-section-header">
+              <div>
+                <div class="card-label">Set Up Tone</div>
+                <p class="card-helper">
+                  Paste a few de-identified notes from your charting. SurgiNote will learn your voice globally and apply it across note types.
+                </p>
+              </div>
+              <div class="card-action-row templates-tone-actions-inline">
+                <button id="analyzeToneBtn" class="primary-action">Analyze tone</button>
+                <button id="resetToneBtn" class="secondary-action">Delete tone setup</button>
+              </div>
+            </div>
+
+            <textarea
+              id="toneSetupNotes"
+              class="app-feedback-text templates-large-textarea templates-style-textarea"
+              rows="10"
+              placeholder="Paste a few de-identified notes here, separated by blank lines."
+            ></textarea>
+
+            <div class="templates-tone-summary-shell">
+              <div class="card-label">Learned Tone Summary</div>
+              <div id="toneSummaryOutput" class="templates-tone-summary">
+                {% if global_tone_profile and global_tone_profile.tone_summary %}
+                  {{ global_tone_profile.tone_summary }}{% if global_tone_profile.tone_traits %}
+
+{% for item in global_tone_profile.tone_traits %}- {{ item }}
+{% endfor %}
+                  {% endif %}
+                {% else %}
+                  No tone profile yet. Paste a few notes and analyze them to build one.
+                {% endif %}
+              </div>
+            </div>
+          </section>
+
+          <section class="templates-magic-card">
+            <div class="card-label">How Tone Is Used</div>
+            <div class="templates-magic-grid">
+              <div class="templates-magic-item">
+                <strong>GLOBAL</strong>
+                <span>Applies your charting voice across consult, clinic, and op notes.</span>
+              </div>
+              <div class="templates-magic-item">
+                <strong>REVERSIBLE</strong>
+                <span>You can delete the learned tone summary and re-run it anytime with a new sample set.</span>
+              </div>
+              <div class="templates-magic-item">
+                <strong>SUMMARY</strong>
+                <span>SurgiNote gives you a readable description of your tone so you can inspect what it learned.</span>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
-
-      <div class="templates-rule-row">
-        <div class="templates-rule-chip">Use placeholders like <code>{hpi}</code>, <code>{objective}</code>, <code>{plan}</code></div>
-        <div class="templates-rule-chip">Wrap must-copy text in <code>[[EXACT]]...[[/EXACT]]</code></div>
-        <div class="templates-rule-chip">Add placement cues above exact text like <code>(put this at the bottom)</code></div>
-      </div>
-
-      <textarea
-        id="templateStrictText"
-        class="app-feedback-text templates-large-textarea"
-        rows="14"
-        placeholder="Reason for Consult:&#10;{reason_for_consult}&#10;&#10;HPI:&#10;{hpi}&#10;&#10;(put this in Description of Procedure)&#10;[[EXACT]]A blue load Endo GIA stapler was used to divide the appendix base.[[/EXACT]]"
-      ></textarea>
-    </section>
-
-    <section class="templates-section-card">
-      <div class="templates-section-header">
-        <div>
-          <div class="card-label">Style / Tone / Organization</div>
-          <p class="card-helper">
-            Paste a real de-identified note. SurgiNote will imitate how you sound and organize information without copying patient-specific facts.
-          </p>
-        </div>
-        <label class="templates-toggle-row">
-          <input id="templateStyleEnabled" type="checkbox" checked />
-          <span class="templates-toggle-copy">Default on</span>
-        </label>
-      </div>
-
-      <textarea
-        id="templateStyleText"
-        class="app-feedback-text templates-large-textarea templates-style-textarea"
-        rows="12"
-        placeholder="Paste a de-identified example note here."
-      ></textarea>
-    </section>
-
-    <section class="templates-magic-card">
-      <div class="card-label">How SurgiNote Uses This</div>
-      <div class="templates-magic-grid">
-        <div class="templates-magic-item">
-          <strong>STRICT</strong>
-          <span>Preserves format, headings, and any marked verbatim wording.</span>
-        </div>
-        <div class="templates-magic-item">
-          <strong>STYLE</strong>
-          <span>Learns your rhythm, tone, and note organization.</span>
-        </div>
-        <div class="templates-magic-item">
-          <strong>LIVE FACTS</strong>
-          <span>Blends the current shorthand facts into that frame naturally instead of pasting stale text.</span>
-        </div>
-      </div>
-    </section>
-
-    <div class="card-action-row templates-editor-actions">
-      <button id="saveTemplateProfileBtn" class="primary-action">Save profile</button>
-      <button id="deleteTemplateProfileBtn" class="secondary-action">Delete profile</button>
     </div>
   </section>
 </section>
@@ -154,9 +236,10 @@
 <script>
 window.__TEMPLATE_WORKSPACE__ = {
   selectedNoteType: {{ selected_note_type|tojson }},
-  initialProfiles: {{ initial_profiles|tojson }}
+  initialProfiles: {{ initial_profiles|tojson }},
+  globalToneProfile: {{ global_tone_profile|tojson }}
 };
 </script>
-<script src="/static/templates_workspace.js"></script>
+<script type="module" src="/static/templates_workspace.js"></script>
 </body>
 </html>

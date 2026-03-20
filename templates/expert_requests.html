@@ -49,9 +49,11 @@
                 </div>
                 <div class="review-scenario-recent-meta">Use the brief below, then write the note in crisp shorthand first.</div>
                 <div class="expert-request-brief-box">
-                  <div class="scenario-brief scenario-brief-compact">
+                  <div class="expert-request-brief-copy">
                     {% for section in item.brief_sections %}
-                      <strong>{{ section.label }}:</strong> {{ section.content }}{% if not loop.last %}<br><br>{% endif %}
+                      <p class="expert-request-brief-section">
+                        <strong>{{ section.label }}:</strong> {{ section.content }}
+                      </p>
                     {% endfor %}
                   </div>
                 </div>
@@ -71,7 +73,7 @@
                       </label>
                       <div class="trainer-roster-field expert-request-draft-shell">
                         <span>Generated draft</span>
-                        <div class="expert-request-draft-card">
+                        <div class="expert-request-draft-card output-wrap" data-role="expert-draft-wrap">
                           <div class="consult-output hidden expert-request-consult-output" data-role="expert-consult-draft"></div>
                           <textarea class="admin-textarea expert-request-draft-text hidden" rows="8" readonly data-role="expert-draft-text"></textarea>
                           <div class="consult-assumption-popover hidden expert-assumption-popover" data-role="assumption-popover">
@@ -83,6 +85,11 @@
                             <div class="consult-assumption-help">If this assumption is reasonable, mark it good so the approved example can carry that signal forward.</div>
                           </div>
                           <div class="expert-request-draft-empty" data-role="expert-draft-empty">Generate a draft from your shorthand to start the review.</div>
+                          <div class="generating-status hidden" data-role="expert-draft-loading" aria-live="polite">
+                            <div class="generating-status-spinner"></div>
+                            <div class="generating-status-text">Generating draft...</div>
+                            <div class="generating-status-subtext">Anesthesia delay.</div>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -118,6 +125,6 @@
     </main>
     {% include "_site_footer.html" %}
   </div>
-  <script src="/static/expert_requests.js"></script>
+  <script type="module" src="/static/expert_requests.js"></script>
 </body>
 </html>
