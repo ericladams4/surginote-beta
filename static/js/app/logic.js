@@ -66,6 +66,8 @@ let latestProcedure = "";
 let latestCaseFacts = null;
 let currentLoadedTemplate = "";
 let currentLoadedNoteType = noteTypeEl ? noteTypeEl.value : "consult_note";
+let activeShorthandNoteType = noteTypeEl ? noteTypeEl.value : "consult_note";
+let shorthandDraftsByNoteType = {};
 let currentConsultSegments = [];
 let currentRichSegments = [];
 let activeAssumptionIndex = null;
@@ -175,6 +177,27 @@ function applyOutputTypographyFromSummary() {
   applyEditorTypography(consultOutputEl, typography);
   applyEditorTypography(richOutputEl, typography);
   syncOutputToolbarTypography();
+}
+
+function positionRecentNotesForViewport() {
+  const recentNotesCard = document.querySelector(".recent-notes-card");
+  const inputCard = document.querySelector(".app-input-card");
+  const outputCard = document.querySelector(".app-output-card");
+  const leftColumn = document.querySelector(".app-left-column");
+  const rightColumn = document.querySelector(".app-right-column");
+
+  if (!recentNotesCard || !inputCard || !outputCard || !leftColumn || !rightColumn) return;
+
+  if (window.matchMedia("(max-width: 900px)").matches) {
+    if (recentNotesCard.parentElement !== rightColumn || recentNotesCard.previousElementSibling !== outputCard) {
+      outputCard.insertAdjacentElement("afterend", recentNotesCard);
+    }
+    return;
+  }
+
+  if (recentNotesCard.parentElement !== leftColumn || recentNotesCard.previousElementSibling !== inputCard) {
+    inputCard.insertAdjacentElement("afterend", recentNotesCard);
+  }
 }
 
 async function performCopyAction() {
@@ -1203,6 +1226,14 @@ function buildFallbackAssumptionPatterns() {
   if (!psh) {
     patterns.push(/\bNo prior abdominal surgery reported\.\b/gi);
   }
+  if (!/\b(?:remaining\s+)?labs?\s+(?:within\s+normal\s+limits|wnl)\b/i.test(normalizedInput)) {
+    patterns.push(/\bremaining labs within normal limits(?:\s+per chart summary)?\.?\b/gi);
+    patterns.push(/\bremaining labs wnl(?:\s+per chart summary)?\.?\b/gi);
+    patterns.push(/\bother labs within normal limits(?:\s+per chart summary)?\.?\b/gi);
+  }
+  if (!/\bvitals?\s+(?:within\s+normal\s+limits|wnl)\b/i.test(normalizedInput)) {
+    patterns.push(/\bvitals?\s+within normal limits(?:\s+per [^.]+)?\.?\b/gi);
+  }
 
   return patterns;
 }
@@ -1220,6 +1251,9 @@ function expandShorthandForAssumptionChecks(text) {
     .replace(/\bappy\b/g, " appendicitis ")
     .replace(/\bcholedocho\b/g, " choledocholithiasis ")
     .replace(/\bappy\b/g, " appendicitis ")
+    .replace(/\blabs?\s+wnl\b/g, " labs within normal limits remaining labs within normal limits ")
+    .replace(/\brest of labs?\s+wnl\b/g, " remaining labs within normal limits ")
+    .replace(/\bvitals?\s+wnl\b/g, " vitals within normal limits ")
     .replace(/\bno drain\b/g, " none placed no drains ")
     .replace(/\bno drains\b/g, " none placed no drains ")
     .replace(/\bno comp(?:s|lications)?\b/g, " none intraoperatively no complications ")
@@ -2305,6 +2339,8 @@ function initializeAppSurface() {
   updateNoteTypeLabels();
   syncNoteTypeDropdown();
   setOutputMode(noteTypeEl ? noteTypeEl.value : "op_note");
+  positionRecentNotesForViewport();
+  window.addEventListener("resize", positionRecentNotesForViewport);
   refreshTemplateRuntimeUI("");
   renderRecentNotesDock();
   if (recentNotesListEl) {

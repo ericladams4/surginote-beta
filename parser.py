@@ -2,8 +2,10 @@ import re
 
 ABBREVIATIONS = {
     "lap chole": "laparoscopic cholecystectomy",
+    "robo chole": "robotic cholecystectomy",
     "robotic chole": "robotic cholecystectomy",
     "rob chole": "robotic cholecystectomy",
+    "choledocho": "choledocholithiasis",
     "s/p": "status post",
     "w/": "with",
     "w/o": "without",
@@ -53,6 +55,7 @@ PROCEDURE_KEYWORDS = {
     ],
     "robotic_cholecystectomy": [
         "robotic cholecystectomy",
+        "robotic chole",
     ],
     "open_inguinal_hernia_repair": [
         "open inguinal hernia repair",

@@ -2465,6 +2465,71 @@
 }
 
 @media (max-width: 900px) {
+  .app-shell {
+    padding: 18px 16px 28px;
+  }
+
+  .site-footer {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
+  }
+
+  .app-header-links {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .app-user-menu {
+    margin-left: 0;
+  }
+
+  .app-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .app-card {
+    padding: 16px;
+  }
+
+  .card-action-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .card-action-row > * {
+    width: 100%;
+  }
+
+  .output-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .output-actions,
+  .output-footer-actions {
+    margin-left: 0;
+    justify-content: stretch;
+  }
+
+  .output-actions .copy-action-button,
+  .output-footer-actions .copy-action-button {
+    width: 100%;
+  }
+
+  .output-editor-chrome {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 10px;
+  }
+
   .recent-note-row {
     align-items: stretch;
   }
@@ -2475,5 +2540,30 @@
 
   .onboarding-choice {
     min-height: 132px;
+  }
+}
+
+@media (max-width: 640px) {
+  .brand-logo {
+    font-size: clamp(34px, 11vw, 52px);
+    line-height: 0.98;
+  }
+
+  .app-header-link-button,
+  .app-user-menu-trigger {
+    min-height: 44px;
+    padding: 9px 12px;
+  }
+
+  .note-type-trigger,
+  .app-select-prominent,
+  .app-shorthand,
+  .primary-action,
+  .outline-action {
+    width: 100%;
+  }
+
+  .output-wrap {
+    min-height: 420px;
   }
 }

@@ -272,6 +272,8 @@ def _case_primary_diagnosis(case_facts):
         ("small bowel obstruction", "small bowel obstruction"),
         ("sbo", "small bowel obstruction"),
         ("cholecystitis", "acute cholecystitis"),
+        ("choledocholithiasis", "choledocholithiasis"),
+        ("choledocho", "choledocholithiasis"),
         ("gallstones", "cholelithiasis"),
         ("symptomatic cholelithiasis", "cholelithiasis"),
         ("hernia", "hernia"),
