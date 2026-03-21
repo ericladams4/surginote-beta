@@ -34,6 +34,11 @@ ABBREVIATIONS = {
     "ivf": "iv fluids",
     "abx": "antibiotics",
     "ngt": "nasogastric tube",
+    "exlap": "exploratory laparotomy",
+    "ex lap": "exploratory laparotomy",
+    "graham patch": "graham patch repair",
+    "mod graham patch": "modified graham patch repair",
+    "mod graham": "modified graham patch repair",
     "er": "emergency room",
     "ed": "emergency department",
     "fu": "follow up",
@@ -81,48 +86,16 @@ PROCEDURE_KEYWORDS = {
         "laparoscopic appendectomy",
         "appendectomy",
     ],
+    "exploratory_laparotomy_with_graham_patch": [
+        "exploratory laparotomy",
+        "exploratory laparotomy with modified graham patch repair",
+        "modified graham patch repair",
+        "graham patch repair",
+        "perforated gastric ulcer",
+    ],
 }
 
-DEFAULTS = {
-    "laparoscopic_cholecystectomy": {
-        "ebl": "minimal",
-        "drain": "none",
-        "specimen": "gallbladder",
-        "complications": "none",
-        "critical_view": True,
-    },
-    "robotic_cholecystectomy": {
-        "ebl": "minimal",
-        "drain": "none",
-        "specimen": "gallbladder",
-        "complications": "none",
-        "critical_view": True,
-    },
-    "open_inguinal_hernia_repair": {
-        "ebl": "minimal",
-        "drain": "none",
-        "mesh_used": True,
-        "complications": "none",
-    },
-    "robotic_inguinal_hernia_repair": {
-        "ebl": "minimal",
-        "drain": "none",
-        "mesh_used": True,
-        "complications": "none",
-    },
-    "open_ventral_hernia_repair": {
-        "ebl": "minimal",
-        "drain": "none",
-        "mesh_used": True,
-        "complications": "none",
-    },
-    "laparoscopic_appendectomy": {
-        "ebl": "minimal",
-        "drain": "none",
-        "specimen": "appendix",
-        "complications": "none",
-    },
-}
+DEFAULTS = {}
 
 SYMPTOM_PATTERNS = {
     "abdominal_pain": [
@@ -916,7 +889,7 @@ def build_case_facts(raw_input: str):
         assumptions["family_history_default"] = "Non-contributory."
 
     if note_context == "consult_note" and not social_history:
-        assumptions["social_history_default"] = "Denies alcohol use, tobacco use, drug use."
+        assumptions["social_history_default"] = "Not provided in shorthand."
 
     if note_context == "consult_note" and not pain_characteristics.get("modifying_factors"):
         assumptions["modifying_factors_default"] = "no specific exacerbating or alleviating factors"

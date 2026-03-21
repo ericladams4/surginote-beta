@@ -276,6 +276,9 @@ def _case_primary_diagnosis(case_facts):
         ("choledocho", "choledocholithiasis"),
         ("gallstones", "cholelithiasis"),
         ("symptomatic cholelithiasis", "cholelithiasis"),
+        ("perforated gastric ulcer", "perforated gastric ulcer"),
+        ("gastric ulcer", "gastric ulcer"),
+        ("free air", "viscus perforation"),
         ("hernia", "hernia"),
     ]
     for needle, label in keyword_map:
@@ -286,14 +289,13 @@ def _case_primary_diagnosis(case_facts):
 
 def _build_asserted_facts(case_facts):
     operative_details = (case_facts or {}).get("operative_details") or {}
-    assumptions = (case_facts or {}).get("assumptions") or {}
     return {
         "procedure": (case_facts or {}).get("procedure") or "",
         "diagnosis": _case_primary_diagnosis(case_facts),
         "laterality": operative_details.get("laterality") or "",
-        "estimated_blood_loss": operative_details.get("estimated_blood_loss") or assumptions.get("ebl") or "",
-        "specimen": operative_details.get("specimen") or assumptions.get("specimen") or "",
-        "implants": operative_details.get("implants") or ("mesh" if assumptions.get("mesh_used") else ""),
+        "estimated_blood_loss": operative_details.get("estimated_blood_loss") or "",
+        "specimen": operative_details.get("specimen") or "",
+        "implants": operative_details.get("implants") or "",
         "cpt_codes": operative_details.get("cpt_codes") or [],
     }
 
@@ -911,6 +913,52 @@ def get_or_create_user(phone: str):
 
     conn.close()
     return user
+
+
+def _log_user_login(user_id):
+    if not user_id:
+        return
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE users
+            SET login_count = COALESCE(login_count, 0) + 1,
+                last_login_at = CURRENT_TIMESTAMP
+            WHERE id = ?
+            """,
+            (user_id,),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def _log_generated_note(user_id, note_type, shorthand, generated_note, procedure_label=""):
+    if not generated_note:
+        return
+    conn = get_conn()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """
+            INSERT INTO generated_notes (
+                user_id, note_type, shorthand, generated_note, procedure_label
+            )
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                note_type,
+                shorthand,
+                generated_note,
+                procedure_label or None,
+            ),
+        )
+        conn.commit()
+    finally:
+        conn.close()
 
 
 def _sync_admin_session_from_user(user):
@@ -1624,6 +1672,64 @@ def _build_admin_rating_trend(cur, days=14):
         "latest_score": latest_scored_point["average_score"] if latest_scored_point else 0,
         "latest_score_display": _format_score(latest_scored_point["average_score"] if latest_scored_point else 0),
     }
+
+
+def _fetch_admin_recent_generated_notes(cur, limit=50):
+    cur.execute(
+        """
+        SELECT gn.id, gn.note_type, gn.shorthand, gn.generated_note, gn.procedure_label, gn.created_at,
+               u.id AS user_id, u.phone, u.email, u.first_name, u.last_name, u.credential_title
+        FROM generated_notes gn
+        LEFT JOIN users u ON u.id = gn.user_id
+        ORDER BY gn.created_at DESC, gn.id DESC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+    rows = []
+    for row in cur.fetchall():
+        item = dict(row)
+        item["user_display_name"] = _user_display_with_title(item)
+        item["user_phone_display"] = _format_phone_display(item.get("phone"))
+        item["note_type_label"] = _note_type_label(item.get("note_type"))
+        item["shorthand_preview"] = _single_line_preview(item.get("shorthand"), limit=160)
+        item["generated_preview"] = _single_line_preview(item.get("generated_note"), limit=220)
+        rows.append(item)
+    return rows
+
+
+def _fetch_admin_user_overview(cur, limit=250):
+    cur.execute(
+        """
+        SELECT u.id, u.phone, u.email, u.first_name, u.last_name, u.credential_title,
+               u.created_at, u.last_login_at, COALESCE(u.login_count, 0) AS login_count,
+               COUNT(DISTINCT gn.id) AS generated_note_count,
+               COUNT(DISTINCT f.id) AS rated_note_count,
+               COALESCE(u.is_admin, 0) AS is_admin,
+               COALESCE(u.is_expert, 0) AS is_expert
+        FROM users u
+        LEFT JOIN generated_notes gn ON gn.user_id = u.id
+        LEFT JOIN feedback f ON f.user_id = u.id
+        GROUP BY u.id, u.phone, u.email, u.first_name, u.last_name, u.credential_title,
+                 u.created_at, u.last_login_at, u.login_count, u.is_admin, u.is_expert
+        ORDER BY u.created_at DESC, u.id DESC
+        LIMIT ?
+        """,
+        (limit,),
+    )
+    rows = []
+    for row in cur.fetchall():
+        item = dict(row)
+        item["display_name"] = _user_display_with_title(item)
+        item["phone_display"] = _format_phone_display(item.get("phone"))
+        roles = []
+        if item.get("is_admin"):
+            roles.append("Admin")
+        if item.get("is_expert"):
+            roles.append("Expert")
+        item["role_label"] = ", ".join(roles) if roles else "User"
+        rows.append(item)
+    return rows
 
 
 def _build_admin_teaching_avenues(cur):
@@ -2929,6 +3035,7 @@ def phone_login_direct():
     session["user_id"] = user_map["id"]
     session["phone"] = user_map["phone"]
     session["phone_authed"] = True
+    _log_user_login(user_map["id"])
     _sync_admin_session_from_user(user_map)
 
     needs_profile = not _user_full_name(user_map) or not (user_map.get("credential_title") or "").strip()
@@ -2967,6 +3074,7 @@ def complete_profile():
         "complete_profile.html",
         error=error,
         current_user=user,
+        phone_display=_format_phone_display((user or {}).get("phone")),
         credential_choices=USER_CREDENTIAL_CHOICES,
     )
 
@@ -3219,6 +3327,7 @@ def index():
     global_tone_profile = _get_global_tone_profile(session["user_id"])
     output_typography = _get_output_typography_settings(session["user_id"])
     onboarding_seen = _normalize_bool(_get_user_preference(session["user_id"], "app_onboarding_seen", 0), default=False)
+    recent_notes_scope = f"user-{session['user_id']}"
     return render_template(
         "index.html",
         warning=PUBLIC_WARNING,
@@ -3229,6 +3338,7 @@ def index():
         ),
         global_tone_profile=global_tone_profile,
         output_typography=output_typography,
+        recent_notes_scope=recent_notes_scope,
         show_onboarding=not onboarding_seen,
         is_admin_user=bool(session.get("is_admin_user")),
         is_expert_user=bool(session.get("is_expert_user")),
@@ -3280,6 +3390,8 @@ def admin():
 
     rating_trend = _build_admin_rating_trend(cur, days=14)
     learning_contributions = _build_admin_learning_contributions(cur)
+    recent_generated_notes = _fetch_admin_recent_generated_notes(cur, limit=50)
+    user_overview_rows = _fetch_admin_user_overview(cur, limit=250)
     cur.execute(
         """
         SELECT COUNT(*) AS note_count,
@@ -3304,6 +3416,8 @@ def admin():
         "admin_dashboard.html",
         rating_trend=rating_trend,
         learning_contributions=learning_contributions,
+        recent_generated_notes=recent_generated_notes,
+        user_overview_rows=user_overview_rows,
         health_summary={
             "note_count": feedback_summary["note_count"] or 0,
             "average_score": feedback_summary["average_score"] or 0,
@@ -4904,6 +5018,14 @@ def generate_note():
     except Exception as exc:
         return jsonify({"error": f"Generation failed: {str(exc)}"}), 500
 
+    _log_generated_note(
+        session.get("user_id"),
+        context["note_type"],
+        context["shorthand"],
+        note_text,
+        context["procedure_label"],
+    )
+
     return jsonify({
         "note": note_text,
         "case_facts": context["case_facts"],
@@ -4947,6 +5069,13 @@ def generate_note_stream():
                 template_content=context.get("template_content"),
                 retrieved_examples=context.get("retrieved_examples"),
                 case_facts=context.get("case_facts"),
+            )
+            _log_generated_note(
+                session.get("user_id"),
+                context["note_type"],
+                context["shorthand"],
+                note_text,
+                context["procedure_label"],
             )
             yield sse_event({"type": "delta", "delta": note_text})
             yield sse_event({

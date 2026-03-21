@@ -49,6 +49,8 @@ def init_db():
     ensure_column(cur, "users", "first_name", "first_name TEXT")
     ensure_column(cur, "users", "last_name", "last_name TEXT")
     ensure_column(cur, "users", "credential_title", "credential_title TEXT")
+    ensure_column(cur, "users", "login_count", "login_count INTEGER NOT NULL DEFAULT 0")
+    ensure_column(cur, "users", "last_login_at", "last_login_at TIMESTAMP")
 
     cur.execute("""
     CREATE TABLE IF NOT EXISTS user_preferences (
@@ -194,6 +196,29 @@ def init_db():
         response_preview TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
+    """)
+
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS generated_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER,
+        note_type TEXT NOT NULL,
+        shorthand TEXT,
+        generated_note TEXT NOT NULL,
+        procedure_label TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+    )
+    """)
+
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_generated_notes_created
+    ON generated_notes (created_at DESC)
+    """)
+
+    cur.execute("""
+    CREATE INDEX IF NOT EXISTS idx_generated_notes_user_created
+    ON generated_notes (user_id, created_at DESC)
     """)
 
     cur.execute("""

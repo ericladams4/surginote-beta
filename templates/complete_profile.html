@@ -20,18 +20,36 @@
       <div class="phone-login-wrap">
         <section class="login-wide-card phone-login-card">
           <div class="phone-login-inner">
-            <h1 class="login-title">Tell us who you are</h1>
-            <p class="login-subtitle phone-login-subtitle">We’ll attach your name and credential to this phone number so your account and admin tools show the right identity.</p>
+            <div class="phone-login-copy">
+              <h1 class="login-title">Badge up.</h1>
+              <p class="login-subtitle phone-login-subtitle">Name, credential, done. We’ll get this badge on the board.</p>
+            </div>
+
+            {% if phone_display %}
+            <div class="profile-complete-phone-card" aria-label="Phone number being set up">
+              <div class="profile-complete-phone-label">Setting up account for</div>
+              <div class="profile-complete-phone-value">{{ phone_display }}</div>
+            </div>
+            {% endif %}
 
             <form method="POST" class="login-form profile-complete-form">
-              <input type="text" name="first_name" class="login-input" placeholder="First name" value="{{ current_user.first_name if current_user else '' }}" required />
-              <input type="text" name="last_name" class="login-input" placeholder="Last name" value="{{ current_user.last_name if current_user else '' }}" required />
+              <label class="login-field">
+                <span class="login-field-label">First name</span>
+                <input type="text" name="first_name" class="login-input" placeholder="First name" value="{{ current_user.first_name if current_user and current_user.first_name and current_user.first_name != 'None' else '' }}" required />
+              </label>
+              <label class="login-field">
+                <span class="login-field-label">Last name</span>
+                <input type="text" name="last_name" class="login-input" placeholder="Last name" value="{{ current_user.last_name if current_user and current_user.last_name and current_user.last_name != 'None' else '' }}" required />
+              </label>
+              <label class="login-field">
+                <span class="login-field-label">Credential</span>
               <select name="credential_title" class="login-input" required>
                 <option value="">Select credential</option>
                 {% for choice in credential_choices %}
                   <option value="{{ choice }}" {% if current_user and current_user.credential_title == choice %}selected{% endif %}>{{ "Student" if choice == "student" else choice }}</option>
                 {% endfor %}
               </select>
+              </label>
               <button type="submit" class="primary-action login-button">Continue to SurgiNote</button>
             </form>
 

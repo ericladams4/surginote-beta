@@ -102,6 +102,118 @@
         </div>
       </section>
 
+      <section class="app-card admin-analytics-card">
+        <div class="admin-section-head">
+          <div>
+            <div class="card-label">Live generation feed</div>
+            <h2 class="admin-console-title">New notes from all users</h2>
+            <p class="card-helper">Every saved generation across the system, with the originating user, shorthand, and produced note.</p>
+          </div>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table admin-dashboard-table">
+            <thead>
+              <tr>
+                <th>Created</th>
+                <th>User</th>
+                <th>Note type</th>
+                <th>Input</th>
+                <th>Output</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if recent_generated_notes %}
+                {% for note in recent_generated_notes %}
+                  <tr>
+                    <td class="admin-table-date-cell">
+                      <div>{{ note.created_at }}</div>
+                    </td>
+                    <td>
+                      <div class="admin-table-user">{{ note.user_display_name or "Unknown user" }}</div>
+                      <div class="admin-table-note-meta">
+                        {% if note.user_phone_display %}{{ note.user_phone_display }}{% endif %}
+                        {% if note.email %}
+                          {% if note.user_phone_display %}<span>&bull;</span>{% endif %}
+                          {{ note.email }}
+                        {% endif %}
+                      </div>
+                    </td>
+                    <td>
+                      <span class="admin-rating-badge">{{ note.note_type_label }}</span>
+                    </td>
+                    <td class="admin-table-preview-cell">
+                      <div class="admin-table-preview">{{ note.shorthand_preview }}</div>
+                    </td>
+                    <td class="admin-table-preview-cell">
+                      <div class="admin-table-preview">{{ note.generated_preview }}</div>
+                    </td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="5" class="structured-empty">No generated notes captured yet.</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="app-card admin-analytics-card">
+        <div class="admin-section-head">
+          <div>
+            <div class="card-label">User overview</div>
+            <h2 class="admin-console-title">All users</h2>
+            <p class="card-helper">Core account details plus login counts and basic engagement totals.</p>
+          </div>
+        </div>
+        <div class="admin-table-wrap">
+          <table class="admin-table admin-dashboard-table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Contact</th>
+                <th>Credential</th>
+                <th>Role</th>
+                <th>Total logins</th>
+                <th>Generated notes</th>
+                <th>Rated notes</th>
+                <th>Last login</th>
+                <th>Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% if user_overview_rows %}
+                {% for user in user_overview_rows %}
+                  <tr>
+                    <td>
+                      <div class="admin-table-user">{{ user.display_name or "Unnamed user" }}</div>
+                    </td>
+                    <td>
+                      <div class="admin-table-preview admin-table-preview--tight">
+                        {% if user.phone_display %}<div>{{ user.phone_display }}</div>{% endif %}
+                        {% if user.email %}<div>{{ user.email }}</div>{% endif %}
+                      </div>
+                    </td>
+                    <td>{{ user.credential_title or "—" }}</td>
+                    <td>{{ user.role_label }}</td>
+                    <td>{{ user.login_count }}</td>
+                    <td>{{ user.generated_note_count }}</td>
+                    <td>{{ user.rated_note_count }}</td>
+                    <td>{{ user.last_login_at or "—" }}</td>
+                    <td>{{ user.created_at or "—" }}</td>
+                  </tr>
+                {% endfor %}
+              {% else %}
+                <tr>
+                  <td colspan="9" class="structured-empty">No user accounts yet.</td>
+                </tr>
+              {% endif %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
     </main>
     {% include "_site_footer.html" %}
   </div>

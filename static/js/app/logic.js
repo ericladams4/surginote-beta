@@ -84,10 +84,11 @@ let ratingModalResolver = null;
 let ratingModalActiveText = "";
 let onboardingCompleting = false;
 
-const RECENT_NOTES_STORAGE_KEY = "surginote.recentNotes.v1";
-const RECENT_NOTES_SELECTED_KEY = "surginote.recentNotes.selected.v1";
-const RATED_NOTES_STORAGE_KEY = "surginote.ratedNotes.v1";
-const MAX_RECENT_NOTES = 5;
+const RECENT_NOTES_SCOPE = String(appState.recentNotesScope || "anonymous");
+const RECENT_NOTES_STORAGE_KEY = `surginote.recentNotes.v1.${RECENT_NOTES_SCOPE}`;
+const RECENT_NOTES_SELECTED_KEY = `surginote.recentNotes.selected.v1.${RECENT_NOTES_SCOPE}`;
+const RATED_NOTES_STORAGE_KEY = `surginote.ratedNotes.v1.${RECENT_NOTES_SCOPE}`;
+const MAX_RECENT_NOTES = 20;
 
 const loadingSubtexts = [
   "Anesthesia delay.",
@@ -198,6 +199,75 @@ function positionRecentNotesForViewport() {
   if (recentNotesCard.parentElement !== leftColumn || recentNotesCard.previousElementSibling !== inputCard) {
     inputCard.insertAdjacentElement("afterend", recentNotesCard);
   }
+}
+
+function getCurrentOutputSnapshot() {
+  return {
+    text: outputEl ? String(outputEl.value || "") : "",
+    procedure: latestProcedure || "",
+    caseFacts: latestCaseFacts || null,
+  };
+}
+
+function saveDraftForNoteType(noteType) {
+  if (!noteType) return;
+
+  const shorthand = shorthandEl ? String(shorthandEl.value || "") : "";
+  const output = getCurrentOutputSnapshot();
+  const hasMeaningfulState = Boolean(shorthand.trim() || output.text.trim());
+
+  if (!hasMeaningfulState) {
+    delete shorthandDraftsByNoteType[noteType];
+    return;
+  }
+
+  shorthandDraftsByNoteType[noteType] = {
+    shorthand,
+    outputText: output.text,
+    procedure: output.procedure,
+    caseFacts: output.caseFacts,
+  };
+}
+
+function clearComposerForNoteType(noteType) {
+  if (shorthandEl) {
+    shorthandEl.value = "";
+    shorthandEl.placeholder = shorthandPlaceholder(noteType);
+  }
+
+  latestProcedure = "";
+  latestCaseFacts = null;
+  outputEl.value = "";
+  clearConsultOutput();
+  clearRichOutput();
+  refreshTemplateRuntimeUI("");
+}
+
+function restoreDraftForNoteType(noteType) {
+  const draft = shorthandDraftsByNoteType[noteType];
+  if (!draft) {
+    clearComposerForNoteType(noteType);
+    return;
+  }
+
+  if (shorthandEl) {
+    shorthandEl.value = draft.shorthand || "";
+    shorthandEl.placeholder = shorthandPlaceholder(noteType);
+  }
+
+  latestProcedure = draft.procedure || "";
+  latestCaseFacts = draft.caseFacts || null;
+
+  if (noteType === "consult_note") {
+    currentConsultSegments = parseConsultTaggedOutput(draft.outputText || "");
+    renderConsultSegments();
+    clearRichOutput();
+  } else {
+    clearConsultOutput();
+    renderRichOutput(draft.outputText || "");
+  }
+
+  refreshTemplateRuntimeUI(draft.outputText || "");
 }
 
 async function performCopyAction() {
@@ -555,15 +625,40 @@ function writeRecentNotes(notes) {
   } catch (_) {}
 }
 
+function isCurrentScreenShowingRecentNote(note) {
+  if (!note) return false;
+
+  const selectedKey = readSelectedRecentNoteKey();
+  if (selectedKey && selectedKey === String(note.createdAt || "")) {
+    return true;
+  }
+
+  const currentNoteType = noteTypeEl ? noteTypeEl.value : activeShorthandNoteType;
+  const currentShorthand = String(shorthandEl ? shorthandEl.value || "" : "").trim();
+  const currentOutput = String(outputEl ? outputEl.value || "" : "").trim();
+
+  return (
+    currentNoteType === (note.noteType || "consult_note") &&
+    currentShorthand === String(note.shorthand || "").trim() &&
+    currentOutput === String(note.outputText || "").trim()
+  );
+}
+
 function deleteRecentNote(index) {
   const notes = readRecentNotes();
   const note = notes[index];
   if (!note) return;
 
+  const wasShowingDeletedNote = isCurrentScreenShowingRecentNote(note);
   const nextNotes = notes.filter((_, itemIndex) => itemIndex !== index);
   writeRecentNotes(nextNotes);
   if (readSelectedRecentNoteKey() === String(note.createdAt || "")) {
     writeSelectedRecentNoteKey("");
+  }
+  if (wasShowingDeletedNote) {
+    const noteType = note.noteType || (noteTypeEl ? noteTypeEl.value : activeShorthandNoteType);
+    delete shorthandDraftsByNoteType[noteType];
+    clearComposerForNoteType(noteType);
   }
   renderRecentNotesDock();
 }
@@ -676,6 +771,12 @@ async function restoreRecentNote(index) {
   setOutputMode(restoredNoteType);
   latestProcedure = note.procedure || "";
   latestCaseFacts = null;
+  shorthandDraftsByNoteType[restoredNoteType] = {
+    shorthand: note.shorthand || "",
+    outputText: note.outputText || "",
+    procedure: note.procedure || "",
+    caseFacts: null,
+  };
   writeSelectedRecentNoteKey(String(note.createdAt || ""));
 
   if (restoredNoteType === "consult_note") {
@@ -1083,6 +1184,7 @@ function preprocessConsultTaggedText(text) {
 function normalizeConsultDisplayText(text) {
   const normalized = sanitizeConsultTagArtifacts(preprocessConsultTaggedText(String(text || "")))
     .replace(/(^|\n)\s*[•*]\s+/g, "$1- ")
+    .replace(/(^|\n)\s*Requested question:\s*[^\n]*(?=\n|$)/gi, "")
     .replace(
       /(^|\n)\s*(Reason for Consult|HPI|Past Medical History|Medical History|Past Surgical History|Surgical History|Family History|Social History|Review of Systems|ROS|Objective|Assessment and Plan)(:?)[ \t]+(?=\S)/gi,
       "$1$2$3\n"
@@ -1144,7 +1246,120 @@ function normalizeConsultDisplayText(text) {
     merged.push(current);
   }
 
-  return merged.join("\n");
+  const formatted = enforceConsultAssessmentPlanLayout(merged);
+  return formatted.join("\n");
+}
+
+function enforceConsultAssessmentPlanLayout(lines) {
+  const output = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const current = lines[index];
+    const trimmed = String(current || "").trim();
+
+    if (!/^Assessment and Plan:\s*$/i.test(trimmed)) {
+      output.push(current);
+      continue;
+    }
+
+    output.push("Assessment and Plan:");
+
+    const sectionLines = [];
+    let cursor = index + 1;
+    while (cursor < lines.length) {
+      const candidate = String(lines[cursor] || "");
+      const candidateTrimmed = candidate.trim();
+
+      if (isConsultSectionHeading(candidateTrimmed)) {
+        break;
+      }
+
+      sectionLines.push(candidate);
+      cursor += 1;
+    }
+
+    const nonEmptyLines = sectionLines.map((line) => line.trim()).filter(Boolean);
+    if (!nonEmptyLines.length) {
+      index = cursor - 1;
+      continue;
+    }
+
+    const bulletStart = nonEmptyLines.findIndex((line, lineIndex) => {
+      if (/^- /.test(line)) {
+        return true;
+      }
+      if (lineIndex === 0) {
+        return false;
+      }
+      return true;
+    });
+
+    const assessmentLines =
+      bulletStart === -1 ? nonEmptyLines : nonEmptyLines.slice(0, Math.max(1, bulletStart));
+    const planLines = bulletStart === -1 ? [] : nonEmptyLines.slice(bulletStart);
+
+    if (assessmentLines.length) {
+      const assessmentText = assessmentLines
+        .map((line) => line.replace(/^Assessment:\s*/i, "").trim())
+        .join(" ")
+        .replace(/\s{2,}/g, " ")
+        .trim();
+      if (assessmentText) {
+        output.push(assessmentText);
+      }
+    }
+
+    if (planLines.length) {
+      output.push("");
+      for (const planLine of planLines) {
+        const cleanedPlan = planLine.replace(/^-+\s*/, "").trim();
+        if (!cleanedPlan) {
+          continue;
+        }
+        output.push(`- ${cleanedPlan}`);
+      }
+    }
+
+    index = cursor - 1;
+  }
+
+  return collapseConsultPlanSpacing(output);
+}
+
+function collapseConsultPlanSpacing(lines) {
+  const collapsed = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const current = String(lines[index] || "");
+    const trimmed = current.trim();
+
+    if (!trimmed) {
+      const previous = collapsed[collapsed.length - 1];
+      const next = lines[index + 1] ? String(lines[index + 1]).trim() : "";
+
+      if (previous === "") {
+        continue;
+      }
+
+      if (/^Assessment and Plan:\s*$/i.test(String(previous || "").trim())) {
+        continue;
+      }
+
+      if (/^- /.test(next) && collapsed.length >= 1) {
+        if (collapsed[collapsed.length - 1] !== "") {
+          collapsed.push("");
+        }
+        continue;
+      }
+
+      collapsed.push("");
+      continue;
+    }
+
+    collapsed.push(current);
+  }
+
+  return collapsed;
 }
 
 function decorateConsultHtml(html) {
@@ -1227,12 +1442,24 @@ function buildFallbackAssumptionPatterns() {
     patterns.push(/\bNo prior abdominal surgery reported\.\b/gi);
   }
   if (!/\b(?:remaining\s+)?labs?\s+(?:within\s+normal\s+limits|wnl)\b/i.test(normalizedInput)) {
-    patterns.push(/\bremaining labs within normal limits(?:\s+per chart summary)?\.?\b/gi);
-    patterns.push(/\bremaining labs wnl(?:\s+per chart summary)?\.?\b/gi);
-    patterns.push(/\bother labs within normal limits(?:\s+per chart summary)?\.?\b/gi);
+    patterns.push(/\bremaining labs within normal limits(?:\s+per chart (?:summary|review))?\.?\b/gi);
+    patterns.push(/\bremaining labs wnl(?:\s+per chart (?:summary|review))?\.?\b/gi);
+    patterns.push(/\bother labs within normal limits(?:\s+per chart (?:summary|review))?\.?\b/gi);
   }
   if (!/\bvitals?\s+(?:within\s+normal\s+limits|wnl)\b/i.test(normalizedInput)) {
     patterns.push(/\bvitals?\s+within normal limits(?:\s+per [^.]+)?\.?\b/gi);
+  }
+  if (!/\b(?:denies|no)\s+alcohol\b/i.test(normalizedInput)) {
+    patterns.push(/\bDenies alcohol use\.?\b/gi);
+  }
+  if (!/\b(?:denies|no)\s+tobacco\b/i.test(normalizedInput) && !/\bnon[- ]?smoker\b/i.test(normalizedInput)) {
+    patterns.push(/\bDenies tobacco use\.?\b/gi);
+  }
+  if (!/\b(?:denies|no)\s+drug use\b/i.test(normalizedInput) && !/\billicit drug use\b/i.test(normalizedInput)) {
+    patterns.push(/\bDenies drug use\.?\b/gi);
+  }
+  if (!/\b(?:denies alcohol use,\s*tobacco use,\s*drug use|denies alcohol use,\s*denies tobacco use,\s*denies drug use)\b/i.test(normalizedInput)) {
+    patterns.push(/\bDenies alcohol use,\s*tobacco use,\s*drug use\.?\b/gi);
   }
 
   return patterns;
@@ -1750,16 +1977,7 @@ function templatePlaceholder(noteType) {
 }
 
 function shorthandPlaceholder(noteType) {
-  if (noteType === "op_note") {
-    return "29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Lap chole 3 ports uncomplicated.";
-  }
-  if (noteType === "clinic_note") {
-    return "52yoF seen for symptomatic cholelithiasis. Intermittent RUQ pain after meals x 4 months. Ultrasound with gallstones. Discussed laparoscopic cholecystectomy, risks/benefits reviewed, patient wishes to proceed.";
-  }
-  if (noteType === "consult_note") {
-    return "67yoM admitted to medicine. Surgery consulted for abdominal pain and emesis. Diffuse severe sharp abdominal pain starting 24 hours ago associated with non-bloody non-bilious emesis, no specific exacerbating or alleviating factors. CT with SBO and transition point. Mild diffuse tenderness, no peritonitis. Recommend bowel rest, IVF, serial abdominal exams.";
-  }
-  return "Describe the encounter in shorthand or free text.";
+  return demoShorthand(noteType);
 }
 
 function demoShorthand(noteType) {
@@ -1958,6 +2176,7 @@ if (deleteTemplateBtn) {
 
 if (noteTypeEl) {
   noteTypeEl.addEventListener("change", async () => {
+    const previousType = activeShorthandNoteType || currentLoadedNoteType || noteTypeEl.value;
     const nextType = noteTypeEl.value;
     syncNoteTypeDropdown();
 
@@ -1978,11 +2197,15 @@ if (noteTypeEl) {
       }
     }
 
+    saveDraftForNoteType(previousType);
+    activeShorthandNoteType = nextType;
+
     if (templateEditorEl) {
       await loadTemplate(nextType);
     }
 
     await loadActiveTemplateSummary(nextType);
+    restoreDraftForNoteType(nextType);
   });
 }
 
@@ -2407,6 +2630,7 @@ function initializeAppSurface() {
 
   if (shorthandEl) {
     shorthandEl.addEventListener("input", () => {
+      saveDraftForNoteType(noteTypeEl ? noteTypeEl.value : activeShorthandNoteType);
       refreshTemplateRuntimeUI(outputEl ? outputEl.value : "");
     });
   }

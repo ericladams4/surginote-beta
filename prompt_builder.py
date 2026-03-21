@@ -108,15 +108,24 @@ Keep this hospitalization summary brief and clinically useful, not repetitive.
 
 History section defaults:
 - If Family History is not explicitly mentioned, write: "Non-contributory."
-- If Social History is not explicitly mentioned, write: "Denies alcohol use, tobacco use, drug use."
+- If Social History is not explicitly mentioned, use neutral wording such as: "Not provided in shorthand."
 - If Past Medical History is not explicitly mentioned, write a concise neutral statement such as: "None reported."
 - If Past Surgical History is not explicitly mentioned, write a concise neutral statement such as: "None reported." or "No prior abdominal surgery reported." when that phrasing is more clinically useful.
 
 Review of Systems requirements:
 - Keep ROS lightweight and concise.
-- Default to negative/normal systems unless symptoms are specified.
+- Format ROS vertically, with one system per line in the same style as the physical exam.
+- Prefer concise system lines such as:
+  - Constitutional: ...
+  - Cardiovascular: ...
+  - Respiratory: ...
+  - Gastrointestinal: ...
+  - Genitourinary: ...
+  - Neurologic: ...
+- Default to concise negative system lines unless symptoms are specified or a reasonable direct inference is supported by the shorthand.
 - Reflect the presenting complaint when relevant, but do not create unsupported positives.
-- Prefer a one-line ROS summary when the case is straightforward rather than omitting the section entirely.
+- It is reasonable to infer gastrointestinal positivity from clearly documented abdominal pain, nausea, emesis, distention, jaundice, or similar GI shorthand.
+- Do not collapse ROS into a single run-on sentence.
 
 Objective requirements:
 - Must include a physical exam under the "Objective" section.
@@ -143,6 +152,7 @@ Objective requirements:
 - Prefer compressed clinical formatting such as:
   - Labs: ...
   - Imaging: ...
+- When referring to unstated remaining labs, prefer the wording "per chart review" rather than "per chart summary."
 
 Assessment and Plan brevity requirements:
 - The assessment must be brief: usually 2–3 sentences maximum.
@@ -350,7 +360,9 @@ def _build_note_specific_guidance(note_type: str) -> str:
 Additional operative note guidance:
 - Make the Description of Procedure the strongest section.
 - Ensure the procedural sequence is coherent and technically believable based on the supplied facts.
-- If assumptions are present in the case facts, incorporate them only when they are standard, low-risk defaults and not contradicted by the source material.
+- Do not anticipate expected intraoperative course, specimen, implants, drains, estimated blood loss, or complications.
+- If an operative detail is not explicitly supported by the source material, omit it rather than infer it from a typical case.
+- Do not convert a planned or expected operative detail into a completed operative fact.
 - If procedure identity is uncertain, keep the wording conservative.
 - If the example note uses a surgeon-specific operative structure, mirror that structure when appropriate.
 - Preferred op note sections may include:
@@ -375,6 +387,7 @@ Additional clinic note guidance:
 - Use dynamic formatting based on the visit type and available facts.
 - If the source suggests preoperative evaluation, emphasize the problem, supporting workup, assessment, and next steps.
 - If the source suggests postoperative follow-up, emphasize interval recovery, symptoms, pathology or imaging review, wound status if supported, and follow-up plan.
+- Do not anticipate operative course, specimen, implants, drains, estimated blood loss, or complications for a planned surgery unless explicitly stated in the source.
 - Assessment should be concise and synthetic rather than repetitive.
 - Plan can be brief and practical.
 - Common useful clinic sections may include:
@@ -394,13 +407,25 @@ Additional consult note guidance:
 - Make it clear what question surgery is being asked to address.
 - Use the required consult sections even when the source material is sparse.
 - The Assessment and Plan section is the most important part of the note.
+- Use natural surgeon phrasing for prior procedures and recent interventions: prefer "status post ERCP" or "s/p ERCP" rather than awkward constructions like "post-ERCP status."
 - Keep HPI clinically efficient: symptom story first, then brief hospital course with key labs/imaging/exam if available.
 - If key pain descriptors are missing, you may infer concise likely wording from a strongly supported acute diagnosis, but tag that wording as [[ASSUMPTION]]...[[/ASSUMPTION]].
 - In Objective, use formal exam lines (Gen, HEENT, Pulmonary, Cardiovascular, Abdomen) plus concise Labs/Imaging lines when supported.
+- Social history defaults such as alcohol/tobacco/drug-use denials should be treated as assumptions unless explicitly stated in the shorthand.
 - If exam details are sparse, use the neutral defaults from the consult note instructions; if CT supports appendicitis or cholecystitis and no abdominal exam is given, assume focal RLQ or RUQ tenderness respectively, tagged as ASSUMPTION.
 - ROS and physical exam content default to ASSUMPTION unless explicitly provided or explicitly stated as normal/negative.
 - Assessment should be a short attending-style paragraph synthesizing diagnosis, supporting facts, and operative vs nonoperative reasoning.
 - Plan should follow after one blank line as 3-6 hyphen bullets with one actionable item each.
+- The plan bullets are the highest-priority part of the consult note and must come from a specific stated plan, action, or recommendation in the shorthand whenever possible.
+- Do not invent routine perioperative, postoperative, discharge, contingency, or housekeeping bullets just to fill space.
+- If a plan bullet is not explicitly supported by the shorthand but is still worth suggesting, it must be written as [[ASSUMPTION]]...[[/ASSUMPTION]] rather than plain factual text.
+- Do not restate the consult question as a trailing bullet or as a separate line such as "Requested question:".
+- Do not predict an expected operative course or anticipated specimen, drains, implants, blood loss, or complications for a future surgery unless explicitly stated in the source.
+- For a planned operation, keep the plan anchored to the preoperative period only.
+- Do not include an anticipated postoperative care plan unless it is explicitly stated in the source.
+- Do not include conditional bullets such as "if intraoperative findings suggest..." unless the source explicitly documents that contingency plan.
+- If the next steps after surgery are not explicit, use neutral wording such as "further plans pending operative course" rather than inventing details.
+- Do not invent social history denials such as alcohol, tobacco, or drug abstinence unless they are explicitly present in the source.
 - If the consult is sparse, keep the note concise; if the example note has a distinctive consult structure or recommendation style, match it when appropriate.
 - For consult notes, every substantive body-text segment should be tagged as [[FACT]] or [[ASSUMPTION]]. Headings, punctuation, bullet markers, and blank lines may remain untagged.
 """
@@ -461,7 +486,7 @@ Special consult placeholder rules:
 - {plan} must contain bullet points only, not numbered items.
 - {objective} should contain the formal exam and any relevant vitals/labs/imaging summary if appropriate.
 - {fh} should default to "Non-contributory." if family history is not given.
-- {sh} should default to "Denies alcohol use, tobacco use, drug use." if social history is not given.
+- {sh} should default to "Not provided in shorthand." if social history is not given.
 """
 
     return f"""

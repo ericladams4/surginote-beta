@@ -97,7 +97,7 @@ aria-labelledby="noteTypeLabelText"
 id="shorthand"
 class="app-shorthand"
 rows="7"
-placeholder="29yoF. Gallstone pancreatitis s/p ERCP w/ stone retrieval. Lap chole 3 ports uncomplicated."
+placeholder="33yo F hx GERD obesity prior c-section here w/ choledocho s/p ERCP 3/17 tbili down to 2.4 from 6. vitals wnl. npo at mn. robo chole tmrw."
 ></textarea>
 
 <div class="card-action-row">
@@ -120,7 +120,7 @@ Demo
 
 <div id="recentNotesList" class="recent-notes-list"></div>
 <div id="recentNotesEmpty" class="recent-notes-empty">
-No saved drafts yet. Your five most recent notes will show up here after you generate them.
+No saved drafts yet. Your 20 most recent notes will show up here after you generate them.
 </div>
 </section>
 </div>
@@ -237,6 +237,7 @@ window.__APP_STATE__ = {
   initialNoteType: {{ initial_note_type|tojson }},
   activeTemplateSummary: {{ active_template_summary|tojson }},
   outputTypography: {{ output_typography|tojson }},
+  recentNotesScope: {{ recent_notes_scope|tojson }},
   showOnboarding: {{ show_onboarding|tojson }}
 };
 </script>
