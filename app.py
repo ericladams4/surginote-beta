@@ -803,7 +803,7 @@ def _fallback_consult_note(case_facts):
         ("Past Medical History", clinical.get("past_medical_history") or "None reported."),
         ("Past Surgical History", clinical.get("past_surgical_history") or "None reported."),
         ("Family History", "Non-contributory."),
-        ("Social History", "Not provided in shorthand."),
+        ("Social History", "Non-contributory."),
         ("Review of Systems", _join_sentence_parts(ros_positive) or "Negative except as noted in HPI."),
         ("Objective", "\n".join(objective_lines) if objective_lines else "Focused exam and data reviewed."),
         ("Assessment and Plan", _join_sentence_parts([

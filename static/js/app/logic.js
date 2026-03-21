@@ -103,6 +103,7 @@ const assumptionLabelEl = document.createElement("div");
 const assumptionInputEl = document.createElement("input");
 const assumptionActionsEl = document.createElement("div");
 const assumptionAcceptBtn = document.createElement("button");
+const assumptionRejectBtn = document.createElement("button");
 const assumptionHelpEl = document.createElement("div");
 
 if (assumptionPopoverEl) {
@@ -115,10 +116,14 @@ if (assumptionPopoverEl) {
   assumptionAcceptBtn.className = "consult-assumption-accept";
   assumptionAcceptBtn.type = "button";
   assumptionAcceptBtn.textContent = "Accept assumption";
+  assumptionRejectBtn.className = "consult-assumption-reject";
+  assumptionRejectBtn.type = "button";
+  assumptionRejectBtn.textContent = "Reject assumption";
   assumptionHelpEl.className = "consult-assumption-help";
   assumptionHelpEl.textContent = "Edit this assumption to change the generated note.";
   assumptionPopoverEl.appendChild(assumptionLabelEl);
   assumptionPopoverEl.appendChild(assumptionInputEl);
+  assumptionActionsEl.appendChild(assumptionRejectBtn);
   assumptionActionsEl.appendChild(assumptionAcceptBtn);
   assumptionPopoverEl.appendChild(assumptionActionsEl);
   assumptionPopoverEl.appendChild(assumptionHelpEl);
@@ -204,6 +209,7 @@ function positionRecentNotesForViewport() {
 function getCurrentOutputSnapshot() {
   return {
     text: outputEl ? String(outputEl.value || "") : "",
+    consultMarkupText: currentConsultSegments.length ? serializeConsultSegments(currentConsultSegments) : "",
     procedure: latestProcedure || "",
     caseFacts: latestCaseFacts || null,
   };
@@ -224,6 +230,7 @@ function saveDraftForNoteType(noteType) {
   shorthandDraftsByNoteType[noteType] = {
     shorthand,
     outputText: output.text,
+    consultMarkupText: output.consultMarkupText,
     procedure: output.procedure,
     caseFacts: output.caseFacts,
   };
@@ -259,7 +266,7 @@ function restoreDraftForNoteType(noteType) {
   latestCaseFacts = draft.caseFacts || null;
 
   if (noteType === "consult_note") {
-    currentConsultSegments = parseConsultTaggedOutput(draft.outputText || "");
+    currentConsultSegments = parseConsultTaggedOutput(draft.consultMarkupText || draft.outputText || "");
     renderConsultSegments();
     clearRichOutput();
   } else {
@@ -272,6 +279,7 @@ function restoreDraftForNoteType(noteType) {
 
 async function performCopyAction() {
   const text = getCurrentOutputText();
+  const html = getCurrentOutputHtml();
   const copyButtons = [copyBtn, copyBtnBottom].filter(Boolean);
   if (!text || !copyButtons.length) return;
 
@@ -280,7 +288,7 @@ async function performCopyAction() {
     button.classList.remove("is-copied", "is-failed");
   });
 
-  const ok = await copyTextWithFallback(text);
+  const ok = await copyTextWithFallback({ text, html });
   copyButtons.forEach((button) => {
     const labelEl = button.querySelector(".copy-action-label");
     if (labelEl) {
@@ -310,25 +318,75 @@ async function performCopyAction() {
   }, 1500);
 }
 
-async function copyTextWithFallback(text) {
+function buildClipboardHtmlFromEditor() {
+  const activeEditor = getActiveOutputEditor();
+  if (!activeEditor) return "";
+
+  const clone = activeEditor.cloneNode(true);
+
+  clone.querySelectorAll(".consult-heading").forEach((node) => {
+    const wrapper = document.createElement("strong");
+    const underline = document.createElement("u");
+    underline.innerHTML = node.innerHTML;
+    wrapper.appendChild(underline);
+    node.replaceWith(wrapper);
+  });
+
+  clone.querySelectorAll(".consult-assumption, .consult-fact, .consult-exact-phrase").forEach((node) => {
+    const span = document.createElement("span");
+    span.innerHTML = node.innerHTML;
+    node.replaceWith(span);
+  });
+
+  clone.querySelectorAll("[data-assumption-index]").forEach((node) => {
+    node.removeAttribute("data-assumption-index");
+  });
+
+  return clone.innerHTML || "";
+}
+
+function getCurrentOutputHtml() {
+  return buildClipboardHtmlFromEditor();
+}
+
+async function copyTextWithFallback({ text, html }) {
   if (!text) return false;
 
   try {
     if (navigator.clipboard && window.isSecureContext) {
+      if (html && window.ClipboardItem && navigator.clipboard.write) {
+        const item = new ClipboardItem({
+          "text/html": new Blob([html], { type: "text/html" }),
+          "text/plain": new Blob([text], { type: "text/plain" }),
+        });
+        await navigator.clipboard.write([item]);
+        return true;
+      }
+
       await navigator.clipboard.writeText(text);
       return true;
     }
   } catch (_) {}
 
   try {
-    const temp = document.createElement("textarea");
-    temp.value = text;
+    const temp = document.createElement("div");
+    temp.contentEditable = "true";
     temp.style.position = "fixed";
     temp.style.left = "-9999px";
+    temp.style.top = "0";
+    temp.style.opacity = "0";
+    temp.innerHTML = html || text.replace(/\n/g, "<br>");
+    temp.setAttribute("aria-hidden", "true");
     document.body.appendChild(temp);
-    temp.select();
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(temp);
+    selection.removeAllRanges();
+    selection.addRange(range);
 
     const successful = document.execCommand("copy");
+    selection.removeAllRanges();
     document.body.removeChild(temp);
     return successful;
   } catch (_) {
@@ -723,14 +781,22 @@ function renderRecentNotesDock() {
 }
 
 function rememberRecentNote({ noteType, shorthand, outputText, procedure }) {
-  const trimmedOutput = String(outputText || "").trim();
+  const effectiveNoteType = noteType || "consult_note";
+  const normalizedOutput = effectiveNoteType === "consult_note"
+    ? normalizeConsultDisplayText(outputText || getConsultPlainText())
+    : String(outputText || "");
+  const trimmedOutput = String(normalizedOutput || "").trim();
   const trimmedShorthand = String(shorthand || "").trim();
+  const consultMarkupText = effectiveNoteType === "consult_note" && currentConsultSegments.length
+    ? serializeConsultSegments(currentConsultSegments)
+    : "";
   if (!trimmedOutput || !trimmedShorthand) return;
 
   const nextEntry = {
-    noteType: noteType || "consult_note",
+    noteType: effectiveNoteType,
     shorthand: trimmedShorthand,
     outputText: trimmedOutput,
+    consultMarkupText,
     procedure: procedure || "",
     title: deriveRecentNoteTitle({
       noteType,
@@ -771,17 +837,36 @@ async function restoreRecentNote(index) {
   setOutputMode(restoredNoteType);
   latestProcedure = note.procedure || "";
   latestCaseFacts = null;
+  const restoredConsultMarkupText = restoredNoteType === "consult_note"
+    ? String(note.consultMarkupText || "")
+    : "";
+  const restoredOutputText = restoredNoteType === "consult_note"
+    ? normalizeConsultDisplayText(restoredConsultMarkupText || note.outputText || "")
+    : (note.outputText || "");
   shorthandDraftsByNoteType[restoredNoteType] = {
     shorthand: note.shorthand || "",
-    outputText: note.outputText || "",
+    outputText: restoredOutputText,
+    consultMarkupText: restoredConsultMarkupText,
     procedure: note.procedure || "",
     caseFacts: null,
   };
   writeSelectedRecentNoteKey(String(note.createdAt || ""));
 
   if (restoredNoteType === "consult_note") {
-    currentConsultSegments = parseConsultTaggedOutput(note.outputText || "");
+    currentConsultSegments = parseConsultTaggedOutput(restoredConsultMarkupText || restoredOutputText);
     renderConsultSegments();
+    const repairedConsultMarkupText = serializeConsultSegments(currentConsultSegments);
+    if (
+      String(note.outputText || "") !== restoredOutputText ||
+      String(note.consultMarkupText || "") !== repairedConsultMarkupText
+    ) {
+      notes[index] = {
+        ...note,
+        outputText: restoredOutputText,
+        consultMarkupText: repairedConsultMarkupText,
+      };
+      writeRecentNotes(notes);
+    }
   } else {
     clearConsultOutput();
     renderRichOutput(note.outputText || "");
@@ -1182,7 +1267,28 @@ function preprocessConsultTaggedText(text) {
 }
 
 function normalizeConsultDisplayText(text) {
-  const normalized = sanitizeConsultTagArtifacts(preprocessConsultTaggedText(String(text || "")))
+  const headingLabels = [
+    "Reason for Consult",
+    "HPI",
+    "Past Medical History",
+    "Medical History",
+    "Past Surgical History",
+    "Surgical History",
+    "Family History",
+    "Social History",
+    "Review of Systems",
+    "ROS",
+    "Objective",
+    "Assessment and Plan",
+  ];
+  const repairedHeadingEchoes = headingLabels.reduce((value, heading) => (
+    value.replace(
+      new RegExp(`(^|\\n)\\s*(${escapeRegExp(heading)})\\s*:?\\s*\\2\\s*:?(?=\\n|\\s|$)`, "gi"),
+      `$1$2:`
+    )
+  ), sanitizeConsultTagArtifacts(preprocessConsultTaggedText(String(text || ""))));
+
+  const normalized = repairedHeadingEchoes
     .replace(/(^|\n)\s*[•*]\s+/g, "$1- ")
     .replace(/(^|\n)\s*Requested question:\s*[^\n]*(?=\n|$)/gi, "")
     .replace(
@@ -1346,7 +1452,9 @@ function collapseConsultPlanSpacing(lines) {
       }
 
       if (/^- /.test(next) && collapsed.length >= 1) {
-        if (collapsed[collapsed.length - 1] !== "") {
+        const previousTrimmed = String(previous || "").trim();
+        const isFirstPlanGap = previousTrimmed && !/^- /.test(previousTrimmed);
+        if (isFirstPlanGap && collapsed[collapsed.length - 1] !== "") {
           collapsed.push("");
         }
         continue;
@@ -1373,8 +1481,25 @@ function decorateConsultHtml(html) {
   );
 }
 
+function serializeConsultSegments(segments) {
+  return (segments || []).map((segment) => {
+    const value = String(segment?.value || "");
+    if (!value) return "";
+    if (segment.type === "fact") {
+      return `[[FACT]]${value}[[/FACT]]`;
+    }
+    if (segment.type === "assumption") {
+      return `[[ASSUMPTION]]${value}[[/ASSUMPTION]]`;
+    }
+    return value;
+  }).join("");
+}
+
 function parseConsultTaggedOutput(text) {
-  const source = preprocessConsultTaggedText(String(text || ""));
+  const rawSource = preprocessConsultTaggedText(String(text || ""));
+  const source = /\[\[(?:FACT|ASSUMPTION)\]\]/i.test(rawSource)
+    ? rawSource
+    : normalizeConsultDisplayText(rawSource);
   const regex = /\[\[(FACT|ASSUMPTION)\]\]([\s\S]*?)\[\[\/\1\]\]/g;
   const segments = [];
   let lastIndex = 0;
@@ -1687,7 +1812,7 @@ function scheduleHideAssumptionPopover() {
   if (assumptionHideTimeout) clearTimeout(assumptionHideTimeout);
   assumptionHideTimeout = setTimeout(() => {
     hideAssumptionPopover();
-  }, 120);
+  }, 280);
 }
 
 function cancelHideAssumptionPopover() {
@@ -1697,19 +1822,51 @@ function cancelHideAssumptionPopover() {
   }
 }
 
-function findAssumptionSegment(index) {
-  let assumptionIndex = -1;
-  const sourceSegments = noteTypeEl && noteTypeEl.value === "consult_note"
+function normalizeAssumptionGroupValue(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function getActiveAssumptionSourceSegments() {
+  return noteTypeEl && noteTypeEl.value === "consult_note"
     ? currentConsultSegments
     : currentRichSegments;
+}
 
-  for (const segment of sourceSegments) {
-    if (segment.type !== "assumption") continue;
-    assumptionIndex += 1;
-    if (assumptionIndex === index) return segment;
-  }
+function buildAssumptionGroupMetadata(segments) {
+  const groupIndexByKey = new Map();
+  const groups = [];
 
-  return null;
+  segments.forEach((segment, segmentIndex) => {
+    if (segment.type !== "assumption") return;
+
+    const key = normalizeAssumptionGroupValue(segment.value);
+    if (!key) return;
+
+    if (!groupIndexByKey.has(key)) {
+      groupIndexByKey.set(key, groups.length);
+      groups.push({
+        key,
+        value: segment.value,
+        accepted: Boolean(segment.accepted),
+        segmentIndexes: [segmentIndex],
+      });
+      return;
+    }
+
+    const group = groups[groupIndexByKey.get(key)];
+    group.segmentIndexes.push(segmentIndex);
+    group.accepted = group.accepted || Boolean(segment.accepted);
+  });
+
+  return { groups, groupIndexByKey };
+}
+
+function findAssumptionGroup(index) {
+  const { groups } = buildAssumptionGroupMetadata(getActiveAssumptionSourceSegments());
+  return groups[index] || null;
 }
 
 function buildExactPhrasePatterns() {
@@ -1782,18 +1939,18 @@ function showAssumptionPopover(targetEl) {
   cancelHideAssumptionPopover();
 
   const assumptionIndex = Number(targetEl.dataset.assumptionIndex);
-  const segment = findAssumptionSegment(assumptionIndex);
-  if (!segment || segment.accepted) return;
+  const group = findAssumptionGroup(assumptionIndex);
+  if (!group || group.accepted) return;
 
   activeAssumptionIndex = assumptionIndex;
   activeAssumptionEl = targetEl;
-  assumptionInputEl.value = segment.value;
+  assumptionInputEl.value = group.value;
   assumptionPopoverEl.classList.remove("hidden");
 
   const wrapRect = outputWrapEl.getBoundingClientRect();
   const targetRect = targetEl.getBoundingClientRect();
 
-  const desiredTop = targetRect.bottom - wrapRect.top + 10;
+  const desiredTop = targetRect.bottom - wrapRect.top + 4;
   const desiredLeft = targetRect.left - wrapRect.left;
   const maxLeft = Math.max(12, wrapRect.width - assumptionPopoverEl.offsetWidth - 12);
 
@@ -1804,7 +1961,7 @@ function showAssumptionPopover(targetEl) {
 function renderConsultSegments() {
   if (!consultOutputEl) return;
 
-  let assumptionIndex = -1;
+  const { groupIndexByKey } = buildAssumptionGroupMetadata(currentConsultSegments);
   const html = currentConsultSegments.map((segment) => {
     const pieces = splitSegmentByExactPhrases(segment.value);
 
@@ -1829,7 +1986,7 @@ function renderConsultSegments() {
     }
 
     if (segment.type === "assumption") {
-      assumptionIndex += 1;
+      const assumptionIndex = groupIndexByKey.get(normalizeAssumptionGroupValue(segment.value));
       return pieces.map((piece) => {
         const safeValue = escapeHtml(piece.value).replace(/\n/g, "<br>");
         const className = [
@@ -1850,18 +2007,20 @@ function renderConsultSegments() {
 
   consultOutputEl.classList.remove("is-generating");
   consultOutputEl.innerHTML = decorateConsultHtml(html);
-  syncStoredOutputText();
+  if (outputEl) {
+    outputEl.value = normalizeRichOutputText(getConsultPlainText());
+  }
   refreshTemplateRuntimeUI(getConsultPlainText());
 }
 
 function renderRichSegments(segments, { isGenerating = false } = {}) {
   if (!richOutputEl || !outputEl) return;
 
-  let assumptionIndex = -1;
+  const { groupIndexByKey } = buildAssumptionGroupMetadata(segments);
   const html = segments.map((segment) => {
     const pieces = splitSegmentByExactPhrases(segment.value);
     if (segment.type === "assumption") {
-      assumptionIndex += 1;
+      const assumptionIndex = groupIndexByKey.get(normalizeAssumptionGroupValue(segment.value));
       return pieces.map((piece) => {
         const safeValue = escapeHtml(piece.value).replace(/\n/g, "<br>");
         const className = [
@@ -1960,6 +2119,9 @@ function setOutputMode(noteType) {
 }
 
 function getCurrentOutputText() {
+  if (noteTypeEl && noteTypeEl.value === "consult_note" && currentConsultSegments.length) {
+    return normalizeConsultDisplayText(getConsultPlainText()).trim();
+  }
   return outputEl ? outputEl.value.trim() : "";
 }
 
@@ -2508,27 +2670,66 @@ function handleConsultMouseOut(event) {
 function handleAssumptionInputChange() {
   if (activeAssumptionIndex === null) return;
 
-  const segment = findAssumptionSegment(activeAssumptionIndex);
-  if (!segment) return;
+  const sourceSegments = getActiveAssumptionSourceSegments();
+  const group = findAssumptionGroup(activeAssumptionIndex);
+  if (!group) return;
 
-  segment.value = assumptionInputEl.value;
-  segment.accepted = false;
-  syncStoredOutputText();
+  group.segmentIndexes.forEach((segmentIndex) => {
+    if (!sourceSegments[segmentIndex]) return;
+    sourceSegments[segmentIndex].value = assumptionInputEl.value;
+    sourceSegments[segmentIndex].accepted = false;
+  });
 
-  if (activeAssumptionEl) {
-    activeAssumptionEl.innerHTML = buildExactPhraseHtml(segment.value);
-    activeAssumptionEl.classList.remove("is-accepted");
+  if (noteTypeEl && noteTypeEl.value === "consult_note") {
+    renderConsultSegments();
+  } else {
+    renderRichSegments(currentRichSegments);
   }
 }
 
 function handleAssumptionAccept() {
   if (activeAssumptionIndex === null) return;
-  const segment = findAssumptionSegment(activeAssumptionIndex);
-  if (!segment) return;
-  segment.accepted = true;
-  if (activeAssumptionEl) {
-    activeAssumptionEl.classList.add("is-accepted");
+  const sourceSegments = getActiveAssumptionSourceSegments();
+  const group = findAssumptionGroup(activeAssumptionIndex);
+  if (!group) return;
+
+  group.segmentIndexes.forEach((segmentIndex) => {
+    if (!sourceSegments[segmentIndex]) return;
+    sourceSegments[segmentIndex].accepted = true;
+  });
+
+  if (noteTypeEl && noteTypeEl.value === "consult_note") {
+    renderConsultSegments();
+  } else {
+    renderRichSegments(currentRichSegments);
   }
+
+  hideAssumptionPopover();
+}
+
+function handleAssumptionReject() {
+  if (activeAssumptionIndex === null) return;
+
+  const isConsultNote = noteTypeEl && noteTypeEl.value === "consult_note";
+  const sourceSegments = isConsultNote ? currentConsultSegments : currentRichSegments;
+  const group = findAssumptionGroup(activeAssumptionIndex);
+  if (!group) return;
+
+  const rejectedIndexes = new Set(group.segmentIndexes);
+  const remainingSegments = sourceSegments.filter((_, index) => !rejectedIndexes.has(index));
+
+  if (isConsultNote) {
+    currentConsultSegments = remainingSegments;
+  } else {
+    currentRichSegments = remainingSegments;
+  }
+
+  if (isConsultNote) {
+    renderConsultSegments();
+  } else {
+    renderRichSegments(currentRichSegments);
+  }
+
   hideAssumptionPopover();
 }
 
@@ -2690,6 +2891,7 @@ export {
   assumptionPopoverEl,
   assumptionInputEl,
   assumptionAcceptBtn,
+  assumptionRejectBtn,
   ratingOptionGridEl,
   ratingModalBackdropEl,
   ratingModalSkipEl,
@@ -2703,6 +2905,7 @@ export {
   handleConsultMouseOut,
   handleAssumptionInputChange,
   handleAssumptionAccept,
+  handleAssumptionReject,
   handleRatingOptionGridClick,
   dismissRatingModal,
   initializeAppSurface,

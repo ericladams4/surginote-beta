@@ -6,6 +6,7 @@ import {
   assumptionPopoverEl,
   assumptionInputEl,
   assumptionAcceptBtn,
+  assumptionRejectBtn,
   ratingOptionGridEl,
   ratingModalBackdropEl,
   ratingModalSkipEl,
@@ -17,6 +18,7 @@ import {
   handleConsultMouseOut,
   handleAssumptionInputChange,
   handleAssumptionAccept,
+  handleAssumptionReject,
   handleRatingOptionGridClick,
   dismissRatingModal,
   initializeAppSurface,
@@ -54,6 +56,7 @@ if (assumptionPopoverEl) {
 
   assumptionInputEl.addEventListener("input", handleAssumptionInputChange);
   assumptionAcceptBtn.addEventListener("click", handleAssumptionAccept);
+  assumptionRejectBtn.addEventListener("click", handleAssumptionReject);
 }
 
 if (ratingOptionGridEl) {

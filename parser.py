@@ -27,7 +27,7 @@ ABBREVIATIONS = {
     "luq": "left upper quadrant",
     "n/v": "nausea and vomiting",
     "n/v/d": "nausea vomiting and diarrhea",
-    "sob": "small bowel obstruction",
+    "sob": "shortness of breath",
     "sbo": "small bowel obstruction",
     "appy": "appendicitis",
     "ccy": "cholecystectomy",
@@ -105,7 +105,6 @@ SYMPTOM_PATTERNS = {
         "right upper quadrant pain",
         "left lower quadrant pain",
         "left upper quadrant pain",
-        "pain",
     ],
     "nausea": ["nausea"],
     "vomiting": ["vomiting", "emesis", "nausea and vomiting"],
@@ -422,11 +421,11 @@ def extract_lab_data(text: str):
     if alk_phos:
         labs["alk_phos"] = alk_phos.group(1)
 
-    ast = re.search(r"ast\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
+    ast = re.search(r"\bast\b\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
     if ast:
         labs["ast"] = ast.group(1)
 
-    alt = re.search(r"alt\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
+    alt = re.search(r"\balt\b\s*(?:of|=)?\s*(\d+(\.\d+)?)", text)
     if alt:
         labs["alt"] = alt.group(1)
 
@@ -462,7 +461,7 @@ def extract_exam_findings(text: str):
 
 def extract_pmh(text: str):
     explicit = re.search(
-        r"(?:past medical history|pmh)\s*(?:is|:)?\s*(.+?)(?:past surgical history|psh|family history|fh|social history|sh|review of systems|ros|objective|assessment|plan|$)",
+        r"(?:\bpast medical history\b|\bpmh\b)\s*(?:is|:)?\s*(.+?)(?:(?:\bpast surgical history\b|\bpsh\b|\bfamily history\b|\bfh\b|\bsocial history\b|\bsh\b|\breview of systems\b|\bros\b|\bobjective\b|\bassessment\b|\bplan\b)|$)",
         text
     )
     if explicit:
@@ -483,7 +482,7 @@ def extract_pmh(text: str):
 
 def extract_psh(text: str):
     explicit = re.search(
-        r"(?:past surgical history|psh)\s*(?:is|:)?\s*(.+?)(?:family history|fh|social history|sh|review of systems|ros|objective|assessment|plan|$)",
+        r"(?:\bpast surgical history\b|\bpsh\b)\s*(?:is|:)?\s*(.+?)(?:(?:\bfamily history\b|\bfh\b|\bsocial history\b|\bsh\b|\breview of systems\b|\bros\b|\bobjective\b|\bassessment\b|\bplan\b)|$)",
         text
     )
     if explicit:
@@ -509,7 +508,7 @@ def extract_psh(text: str):
 
 def extract_family_history(text: str):
     explicit = re.search(
-        r"(?:family history|fh)\s*(?:is|:)?\s*(.+?)(?:social history|sh|review of systems|ros|objective|assessment|plan|$)",
+        r"(?:\bfamily history\b|\bfh\b)\s*(?:is|:)?\s*(.+?)(?:(?:\bsocial history\b|\bsh\b|\breview of systems\b|\bros\b|\bobjective\b|\bassessment\b|\bplan\b)|$)",
         text
     )
     if explicit:
@@ -525,7 +524,7 @@ def extract_family_history(text: str):
 
 def extract_social_history(text: str):
     explicit = re.search(
-        r"(?:social history|sh)\s*(?:is|:)?\s*(.+?)(?:review of systems|ros|objective|assessment|plan|$)",
+        r"(?:\bsocial history\b|\bsh\b)\s*(?:is|:)?\s*(.+?)(?:(?:\breview of systems\b|\bros\b|\bobjective\b|\bassessment\b|\bplan\b)|$)",
         text
     )
     if explicit:
@@ -889,7 +888,7 @@ def build_case_facts(raw_input: str):
         assumptions["family_history_default"] = "Non-contributory."
 
     if note_context == "consult_note" and not social_history:
-        assumptions["social_history_default"] = "Not provided in shorthand."
+        assumptions["social_history_default"] = "Non-contributory."
 
     if note_context == "consult_note" and not pain_characteristics.get("modifying_factors"):
         assumptions["modifying_factors_default"] = "no specific exacerbating or alleviating factors"

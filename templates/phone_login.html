@@ -49,6 +49,7 @@
                       data-index="{{ index }}"
                       aria-label="Phone digit {{ index + 1 }}"
                       autocomplete="off"
+                      {% if index == 0 %}autofocus enterkeyhint="next"{% endif %}
                     />
                   {% endfor %}
                 </div>
@@ -217,7 +218,23 @@
     });
 
     syncPhoneValue();
-    digitInputs[0].focus();
+
+    function focusFirstDigit({ preventScroll = true } = {}) {
+      if (!digitInputs.length) return;
+      const firstInput = digitInputs[0];
+      firstInput.focus({ preventScroll });
+      firstInput.select();
+    }
+
+    window.addEventListener("load", () => {
+      window.requestAnimationFrame(() => focusFirstDigit());
+    });
+
+    window.addEventListener("pageshow", () => {
+      window.requestAnimationFrame(() => focusFirstDigit());
+    });
+
+    focusFirstDigit();
   </script>
 </body>
 </html>

@@ -29,3 +29,25 @@ def test_two_stage_generate_sanitized_example(monkeypatch):
     assert isinstance(meta, dict)
     assert meta["usage"]["total_tokens"] == 123
     assert isinstance(meta["asserted_from_model"], dict)
+
+
+def test_build_case_facts_does_not_confuse_sob_with_sbo_or_invent_ast():
+    facts = build_case_facts(
+        "74 yo M hx tobacco use and ETOH use, has not seen a doctor in 20 yrs, here w/ worsening SOB x 2 years but worse in last 2 months. "
+        "Reports significant orthopnea and leg swelling. Decrease oral intake. Denies chest pain. Looks cachectic. Needs 4L O2 to sat well in ED. "
+        "No O2 at home. CT PE negative for PE but c/f 2.2cm RUL nodule c/f malignancy. Pt admitted to medicine. thoracic surgery consulted. "
+        "Agree with medicine w/u for CHF exacerbation but fear this is advanced malignancy. Will tentativley plan for diagnostic endobronchial ultrasound on Monday. "
+        "NPO at midnight."
+    )
+
+    normalized = facts.get("normalized_input", "").lower()
+    clinical = facts.get("clinical_context", {})
+    labs = clinical.get("labs", {})
+    pmh = str(clinical.get("past_medical_history") or "").lower()
+
+    assert "shortness of breath" in normalized
+    assert "small bowel obstruction" not in normalized
+    assert "small bowel obstruction" not in pmh
+    assert "ast" not in labs
+    assert "abdominal_pain" not in clinical.get("symptoms", [])
+    assert clinical.get("social_history") == "Alcohol use, Tobacco use."

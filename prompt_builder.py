@@ -108,7 +108,7 @@ Keep this hospitalization summary brief and clinically useful, not repetitive.
 
 History section defaults:
 - If Family History is not explicitly mentioned, write: "Non-contributory."
-- If Social History is not explicitly mentioned, use neutral wording such as: "Not provided in shorthand."
+- If Social History is not explicitly mentioned, write: "Non-contributory."
 - If Past Medical History is not explicitly mentioned, write a concise neutral statement such as: "None reported."
 - If Past Surgical History is not explicitly mentioned, write a concise neutral statement such as: "None reported." or "No prior abdominal surgery reported." when that phrasing is more clinically useful.
 
@@ -163,7 +163,10 @@ Assessment and Plan brevity requirements:
 - Do not include unnecessary contingency planning unless strongly supported.
 - Each plan bullet should usually be a short action phrase, not a full paragraph.
 - Similar information density is desired, but with shorter phrasing and less narrative.
-- Even when concise, the plan should usually cover disposition/location of care, diet/fluids, antibiotics or other immediate treatment when relevant, symptom control, and operative timing or follow-up recommendations as appropriate to the case.
+- For consult notes, do not add routine plan categories just because they are commonly expected.
+- In the PLAN bullets, include only actions, recommendations, or next steps that are explicitly stated in the shorthand.
+- Do not add speculative operative or postoperative contingencies just because they are commonly possible.
+- Do not write bullets framed as "if this happens in the OR..." or similar unless that exact contingency is explicitly documented in the source.
 
 Consult style rules:
 - emphasize the reason for consultation, the key clinical facts, the surgical impression, and actionable recommendations
@@ -416,15 +419,18 @@ Additional consult note guidance:
 - ROS and physical exam content default to ASSUMPTION unless explicitly provided or explicitly stated as normal/negative.
 - Assessment should be a short attending-style paragraph synthesizing diagnosis, supporting facts, and operative vs nonoperative reasoning.
 - Plan should follow after one blank line as 3-6 hyphen bullets with one actionable item each.
-- The plan bullets are the highest-priority part of the consult note and must come from a specific stated plan, action, or recommendation in the shorthand whenever possible.
+- The plan bullets are the highest-priority part of the consult note and must come only from specific stated plans, actions, or recommendations in the shorthand.
 - Do not invent routine perioperative, postoperative, discharge, contingency, or housekeeping bullets just to fill space.
 - If a plan bullet is not explicitly supported by the shorthand but is still worth suggesting, it must be written as [[ASSUMPTION]]...[[/ASSUMPTION]] rather than plain factual text.
+- Do not convert routine standard-of-care items into plain plan bullets unless the shorthand actually says them.
+- If the shorthand gives only one explicit plan item, it is acceptable for the PLAN section to contain only one bullet.
 - Do not restate the consult question as a trailing bullet or as a separate line such as "Requested question:".
 - Do not predict an expected operative course or anticipated specimen, drains, implants, blood loss, or complications for a future surgery unless explicitly stated in the source.
 - For a planned operation, keep the plan anchored to the preoperative period only.
 - Do not include an anticipated postoperative care plan unless it is explicitly stated in the source.
 - Do not include conditional bullets such as "if intraoperative findings suggest..." unless the source explicitly documents that contingency plan.
-- If the next steps after surgery are not explicit, use neutral wording such as "further plans pending operative course" rather than inventing details.
+- Never speculate in the PLAN about what may be needed intraoperatively or after surgery unless explicitly stated in the source.
+- If further postoperative or disposition details are not explicit, use the exact neutral wording: "Further plans pending operative course."
 - Do not invent social history denials such as alcohol, tobacco, or drug abstinence unless they are explicitly present in the source.
 - If the consult is sparse, keep the note concise; if the example note has a distinctive consult structure or recommendation style, match it when appropriate.
 - For consult notes, every substantive body-text segment should be tagged as [[FACT]] or [[ASSUMPTION]]. Headings, punctuation, bullet markers, and blank lines may remain untagged.
@@ -486,7 +492,7 @@ Special consult placeholder rules:
 - {plan} must contain bullet points only, not numbered items.
 - {objective} should contain the formal exam and any relevant vitals/labs/imaging summary if appropriate.
 - {fh} should default to "Non-contributory." if family history is not given.
-- {sh} should default to "Not provided in shorthand." if social history is not given.
+- {sh} should default to "Non-contributory." if social history is not given.
 """
 
     return f"""
