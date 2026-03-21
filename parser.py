@@ -52,6 +52,16 @@ ABBREVIATIONS = {
     "etoh": "alcohol",
     "tob": "tobacco",
     "hx": "history",
+    "ebus": "endobronchial ultrasound",
+    "cta": "ct angiography",
+    "clti": "chronic limb threatening ischemia",
+    "pad": "peripheral arterial disease",
+    "dvt": "deep vein thrombosis",
+    "pe": "pulmonary embolism",
+    "rul": "right upper lobe",
+    "lul": "left upper lobe",
+    "rll": "right lower lobe",
+    "lll": "left lower lobe",
 }
 
 PROCEDURE_KEYWORDS = {
@@ -122,6 +132,17 @@ SYMPTOM_PATTERNS = {
     "poor_po": ["poor oral intake", "poor po intake", "decreased oral intake"],
     "jaundice": ["jaundice"],
     "anorexia": ["anorexia", "decreased appetite"],
+    "shortness_of_breath": ["shortness of breath", "dyspnea"],
+    "orthopnea": ["orthopnea"],
+    "leg_swelling": ["leg swelling", "lower extremity edema", "edema"],
+    "chest_pain": ["chest pain"],
+    "cough": ["cough"],
+    "hemoptysis": ["hemoptysis"],
+    "hypoxia": ["hypoxia", "needs 2l o2", "needs 3l o2", "needs 4l o2", "supplemental o2", "oxygen requirement"],
+    "claudication": ["claudication", "rest pain"],
+    "wound": ["wound", "ulcer", "gangrene"],
+    "bleeding": ["bleeding", "hemorrhage"],
+    "trauma": ["trauma", "fall", "mvc", "gsw", "stab wound", "blunt trauma"],
 }
 
 IMAGING_PATTERNS = {
@@ -145,6 +166,39 @@ IMAGING_PATTERNS = {
     "ct_cholecystitis": [
         "ct with cholecystitis",
         "ct shows cholecystitis",
+    ],
+    "pulmonary_nodule": [
+        "pulmonary nodule",
+        "lung nodule",
+        "right upper lobe nodule",
+        "left upper lobe nodule",
+        "concerning for malignancy",
+    ],
+    "cta_negative_pe": [
+        "ct pe negative for pe",
+        "negative for pe",
+    ],
+    "carotid_stenosis": [
+        "carotid stenosis",
+    ],
+    "aaa": [
+        "abdominal aortic aneurysm",
+        "aaa",
+    ],
+    "pad": [
+        "peripheral arterial disease",
+        "arterial occlusion",
+        "limb ischemia",
+    ],
+    "pneumothorax": [
+        "pneumothorax",
+    ],
+    "hemothorax": [
+        "hemothorax",
+    ],
+    "rib_fracture": [
+        "rib fracture",
+        "rib fractures",
     ],
 }
 
@@ -173,12 +227,23 @@ PLAN_PATTERNS = {
     "follow_up": ["follow up", "outpatient follow up", "return to clinic"],
     "admit": ["admit", "admission"],
     "discharge": ["discharge", "ok for discharge"],
+    "bronchoscopy": ["bronchoscopy", "endobronchial ultrasound", "ebus"],
+    "biopsy": ["biopsy"],
+    "heparin": ["heparin"],
+    "anticoagulation": ["anticoagulation"],
+    "duplex": ["duplex"],
+    "cta": ["ct angiography", "cta"],
+    "chest_tube": ["chest tube"],
 }
 
 CONSULT_PATTERNS = [
     "surgery consulted",
     "consulted for",
     "general surgery consulted",
+    "thoracic surgery consulted",
+    "vascular surgery consulted",
+    "trauma surgery consulted",
+    "acute care surgery consulted",
     "surgical consult",
     "reason for consult",
     "ed consult",
@@ -228,6 +293,55 @@ OPERATIVE_PATTERNS = [
     "drain",
     "operative",
 ]
+
+SPECIALTY_PATTERNS = {
+    "General Surgery": [
+        "general surgery consulted",
+        "appendicitis",
+        "cholecystitis",
+        "choledocholithiasis",
+        "hernia",
+        "small bowel obstruction",
+        "diverticulitis",
+    ],
+    "Thoracic Surgery": [
+        "thoracic surgery consulted",
+        "endobronchial ultrasound",
+        "bronchoscopy",
+        "ebus",
+        "lung nodule",
+        "pulmonary nodule",
+        "right upper lobe nodule",
+        "left upper lobe nodule",
+        "hemothorax",
+        "pneumothorax",
+    ],
+    "Vascular Surgery": [
+        "vascular surgery consulted",
+        "carotid stenosis",
+        "abdominal aortic aneurysm",
+        "aaa",
+        "peripheral arterial disease",
+        "limb ischemia",
+        "claudication",
+        "rest pain",
+        "duplex",
+        "ct angiography",
+    ],
+    "Trauma / Acute Care Surgery": [
+        "trauma surgery consulted",
+        "acute care surgery consulted",
+        "blunt trauma",
+        "penetrating trauma",
+        "fall",
+        "mvc",
+        "gsw",
+        "stab wound",
+        "rib fracture",
+        "splenic injury",
+        "liver injury",
+    ],
+}
 
 PAIN_LOCATIONS = [
     "diffuse",
@@ -385,8 +499,23 @@ def extract_plans(text: str):
     return found
 
 
+def infer_specialty(text: str):
+    scores = {}
+    for specialty, patterns in SPECIALTY_PATTERNS.items():
+        scores[specialty] = sum(1 for pattern in patterns if pattern in text)
+
+    best_specialty = max(scores, key=scores.get)
+    best_score = scores[best_specialty]
+    if best_score == 0:
+        return None, 0.0
+
+    total = sum(scores.values()) or 1
+    return best_specialty, round(best_score / total, 2)
+
+
 def extract_consult_question(text: str):
     patterns = [
+        r"(?:thoracic surgery|vascular surgery|trauma surgery|acute care surgery|general surgery|surgery) consulted for (.+?)(?: with | ct | ultrasound | bronchoscopy | endobronchial ultrasound | wbc | lactate | exam | due to |$)",
         r"surgery consulted for (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)",
         r"consulted for (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)",
         r"reason for consult (.+?)(?: with | ct | ultrasound | wbc | lactate | exam | due to |$)",
@@ -716,6 +845,15 @@ def extract_hospital_course(text: str):
     if "recent ercp" in text or "status post ercp" in text or "ercp" in text:
         course["recent_procedure"] = "recent ERCP"
 
+    if "thoracic surgery consulted" in text:
+        course["consulting_service"] = "thoracic surgery"
+    elif "vascular surgery consulted" in text:
+        course["consulting_service"] = "vascular surgery"
+    elif "trauma surgery consulted" in text or "acute care surgery consulted" in text:
+        course["consulting_service"] = "trauma / acute care surgery"
+    elif "general surgery consulted" in text or "surgery consulted" in text:
+        course["consulting_service"] = "general surgery"
+
     if "post ercp pancreatitis" in text or "post-ercp pancreatitis" in text:
         course["complication"] = "prior post-ERCP pancreatitis"
 
@@ -730,6 +868,13 @@ def extract_formal_exam_defaults(text: str, exam_findings):
         "cardiovascular": "Warm and well perfused",
         "abdomen": "Soft, non-tender, non-distended, no guarding, no hernias or masses appreciated",
     }
+
+    if "shortness of breath" in text or "hypoxia" in text or "oxygen" in text:
+        exam["pulmonary"] = "Breathing comfortably at rest; supplemental oxygen requirement noted if documented"
+    if "leg swelling" in text or "edema" in text or "limb ischemia" in text:
+        exam["cardiovascular"] = "Warm and perfused"
+    if "trauma" in text or "fall" in text or "mvc" in text or "gsw" in text or "stab wound" in text:
+        exam["gen"] = "No acute distress"
 
     if "appendicitis" in text:
         exam["abdomen"] = "Soft, focal right lower quadrant tenderness to palpation"
@@ -794,6 +939,7 @@ def infer_note_context(text: str):
 
 def build_case_facts(raw_input: str):
     normalized = normalize_text(raw_input)
+    specialty, specialty_confidence = infer_specialty(normalized)
     demographics = extract_demographics(normalized)
     procedure, procedure_confidence = classify_procedure(normalized)
     note_context, note_context_confidence = infer_note_context(normalized)
@@ -831,6 +977,8 @@ def build_case_facts(raw_input: str):
         operative_details["mesh_mentioned"] = True
 
     clinical_context = {}
+    if specialty:
+        clinical_context["specialty_hint"] = specialty
     if consult_context:
         clinical_context["context"] = consult_context
     if visit_context:
@@ -910,6 +1058,8 @@ def build_case_facts(raw_input: str):
         "confidence": {
             "procedure": procedure_confidence,
             "note_context": note_context_confidence,
+            "specialty": specialty_confidence,
         },
+        "specialty_hint": specialty,
         "needs_review": needs_review,
     }

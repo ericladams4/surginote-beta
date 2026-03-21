@@ -59,6 +59,7 @@ EXPERT_REQUEST_KINDS = ("gold_standard_note", "needed_scenario")
 EXPERT_REQUEST_STATUSES = ("pending", "submitted", "completed")
 SPECIALTY_OPTIONS = [
     "General Surgery",
+    "Thoracic Surgery",
     "Trauma / Acute Care Surgery",
     "Colorectal Surgery",
     "Breast Surgery",
@@ -276,6 +277,20 @@ def _case_primary_diagnosis(case_facts):
         ("choledocho", "choledocholithiasis"),
         ("gallstones", "cholelithiasis"),
         ("symptomatic cholelithiasis", "cholelithiasis"),
+        ("pulmonary nodule", "pulmonary nodule concerning for malignancy"),
+        ("lung nodule", "pulmonary nodule concerning for malignancy"),
+        ("rul nodule", "right upper lobe pulmonary nodule concerning for malignancy"),
+        ("hemothorax", "hemothorax"),
+        ("pneumothorax", "pneumothorax"),
+        ("rib fracture", "rib fractures"),
+        ("carotid stenosis", "carotid stenosis"),
+        ("abdominal aortic aneurysm", "abdominal aortic aneurysm"),
+        ("aaa", "abdominal aortic aneurysm"),
+        ("chronic limb threatening ischemia", "chronic limb threatening ischemia"),
+        ("limb ischemia", "acute limb ischemia"),
+        ("femoral occlusion", "arterial occlusive disease"),
+        ("peripheral arterial disease", "peripheral arterial disease"),
+        ("claudication", "peripheral arterial disease"),
         ("perforated gastric ulcer", "perforated gastric ulcer"),
         ("gastric ulcer", "gastric ulcer"),
         ("free air", "viscus perforation"),
@@ -569,8 +584,9 @@ def two_stage_generate(
     global_tone_profile=None,
 ):
     facts = case_facts or build_case_facts(shorthand)
+    specialty = _effective_generation_specialty(specialty, facts)
     primary_diagnosis = _case_primary_diagnosis(facts)
-    if not facts.get("procedure") and not primary_diagnosis:
+    if note_type != "consult_note" and not facts.get("procedure") and not primary_diagnosis:
         raise ValueError("Procedure or diagnosis must be identifiable before generation.")
 
     effective_template = template_content
@@ -717,6 +733,7 @@ def _fallback_consult_note(case_facts):
     diagnosis = _case_primary_diagnosis(facts) or "acute surgical problem"
     demographics = facts.get("demographics") or {}
     clinical = facts.get("clinical_context") or {}
+    specialty = facts.get("specialty_hint") or clinical.get("specialty_hint") or DEFAULT_SPECIALTY
     formal_exam = clinical.get("formal_exam") or {}
     labs = clinical.get("labs") or {}
     symptoms = clinical.get("symptoms") or []
@@ -740,6 +757,16 @@ def _fallback_consult_note(case_facts):
         "poor_po": "poor oral intake",
         "fever": "fever",
         "chills": "chills",
+        "shortness_of_breath": "shortness of breath",
+        "orthopnea": "orthopnea",
+        "leg_swelling": "leg swelling",
+        "chest_pain": "chest pain",
+        "cough": "cough",
+        "hemoptysis": "hemoptysis",
+        "bleeding": "bleeding",
+        "trauma": "traumatic injury",
+        "claudication": "claudication",
+        "wound": "wound concerns",
     }
     for symptom in symptoms:
         label = symptom_map.get(symptom)
@@ -779,13 +806,21 @@ def _fallback_consult_note(case_facts):
 
     plan_parts = []
     if "admit" in plans:
-        plan_parts.append("Admit to the surgical service")
+        plan_parts.append("Continue inpatient management")
     if "npo" in plans:
         plan_parts.append("Keep NPO")
     if "antibiotics" in plans:
         plan_parts.append("Continue IV antibiotics")
     if "iv_fluids" in plans:
         plan_parts.append("Provide IV fluids")
+    if "bronchoscopy" in plans:
+        plan_parts.append("Proceed with planned bronchoscopy / endobronchial ultrasound")
+    if "biopsy" in plans:
+        plan_parts.append("Proceed with planned biopsy workup")
+    if "heparin" in plans or "anticoagulation" in plans:
+        plan_parts.append("Continue anticoagulation plan per primary and consulting teams")
+    if "chest_tube" in plans:
+        plan_parts.append("Chest tube management as clinically indicated")
     if facts.get("procedure") == "laparoscopic_appendectomy" or "appendicitis" in diagnosis:
         plan_parts.append("Plan laparoscopic appendectomy when OR timing allows")
     if not plan_parts:
@@ -798,7 +833,7 @@ def _fallback_consult_note(case_facts):
             ros_positive.append(value_text)
 
     sections = [
-        ("Reason for Consult", f"Evaluation and management of {diagnosis}."),
+        ("Reason for Consult", f"Evaluation and management of {diagnosis} by {specialty.lower()}."),
         ("HPI", _join_sentence_parts(hpi_parts)),
         ("Past Medical History", clinical.get("past_medical_history") or "None reported."),
         ("Past Surgical History", clinical.get("past_surgical_history") or "None reported."),
@@ -1467,6 +1502,14 @@ EXAMPLE NOTES:
 def _normalize_specialty(value):
     specialty = (value or "").strip()
     return specialty or DEFAULT_SPECIALTY
+
+
+def _effective_generation_specialty(requested_specialty, case_facts):
+    normalized_requested = _normalize_specialty(requested_specialty)
+    inferred_specialty = (case_facts or {}).get("specialty_hint") or ((case_facts or {}).get("clinical_context") or {}).get("specialty_hint")
+    if normalized_requested == DEFAULT_SPECIALTY and inferred_specialty:
+        return inferred_specialty
+    return normalized_requested
 
 
 def _curriculum_modules():
@@ -2923,6 +2966,7 @@ def build_generation_context(payload, use_user_template=True, use_training_corpu
     parse_started_at = perf_counter()
     case_facts = build_case_facts(shorthand)
     parse_ms = round((perf_counter() - parse_started_at) * 1000, 1)
+    specialty = _effective_generation_specialty(specialty, case_facts)
 
     template_content = None
     template_profile = None

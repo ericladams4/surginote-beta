@@ -31,7 +31,7 @@ SUPPORTED_TEMPLATE_PLACEHOLDERS = {
 
 NOTE_TYPE_INSTRUCTIONS = {
     "op_note": """
-Generate a polished operative note appropriate for a general surgeon.
+Generate a polished operative note appropriate for the relevant surgical specialty.
 
 Priorities:
 - concise but complete operative documentation
@@ -41,7 +41,7 @@ Priorities:
 - avoid clinic- or consult-style assessment/plan sections unless clearly relevant
 """,
     "clinic_note": """
-Generate a polished clinic note appropriate for a general surgeon.
+Generate a polished clinic note appropriate for the relevant surgical specialty.
 
 Priorities:
 - outpatient tone
@@ -51,14 +51,14 @@ Priorities:
 - do not force operative sections unless clearly relevant
 
 Preferred style:
-- sound like a real general surgery office note
+- sound like a real specialty-appropriate surgical office note
 - if this appears to be a preoperative visit, emphasize surgical problem, supporting workup, impression, and next-step planning
 - if this appears to be a postoperative clinic visit, emphasize interval recovery, symptoms, pathology or imaging discussion, wound status if supported, and follow-up
 - assessment should synthesize rather than simply repeat the history
 - plan should be practical and succinct
 """,
     "consult_note": """
-Generate a concise but complete surgical consult note appropriate for an inpatient or ED consultation.
+Generate a concise but complete surgical consult note appropriate for an inpatient or ED consultation in the relevant surgical specialty.
 
 Consult note sections must appear in this order unless a valid placeholder template explicitly rearranges them:
 - Reason for Consult
@@ -115,6 +115,8 @@ History section defaults:
 Review of Systems requirements:
 - Keep ROS lightweight and concise.
 - Format ROS vertically, with one system per line in the same style as the physical exam.
+- Write ROS from the perspective of a clinician who personally spoke with the patient.
+- Never attribute ROS findings to chart review, ED documentation, nursing documentation, or another note.
 - Prefer concise system lines such as:
   - Constitutional: ...
   - Cardiovascular: ...
@@ -130,6 +132,8 @@ Review of Systems requirements:
 Objective requirements:
 - Must include a physical exam under the "Objective" section.
 - Include available vitals, exam findings, labs, and imaging if supported.
+- Write the physical exam from the perspective of a clinician who personally examined the patient.
+- Never write physical exam lines as "per chart review," "per ED documentation," or similar second-hand attribution.
 - The physical exam should be written in formal exam format with one organ system per line, with the finding on the same line as the label:
   - Gen: ...
   - HEENT: ...
@@ -386,7 +390,7 @@ Additional operative note guidance:
     if note_type == "clinic_note":
         return """
 Additional clinic note guidance:
-- Write like a real general surgery office note.
+- Write like a real specialty-appropriate surgical office note.
 - Use dynamic formatting based on the visit type and available facts.
 - If the source suggests preoperative evaluation, emphasize the problem, supporting workup, assessment, and next steps.
 - If the source suggests postoperative follow-up, emphasize interval recovery, symptoms, pathology or imaging review, wound status if supported, and follow-up plan.
@@ -406,7 +410,7 @@ Additional clinic note guidance:
     if note_type == "consult_note":
         return """
 Additional consult note guidance:
-- Write like a real inpatient or emergency general surgery consult.
+- Write like a real inpatient or emergency surgical consult for the requested specialty.
 - Make it clear what question surgery is being asked to address.
 - Use the required consult sections even when the source material is sparse.
 - The Assessment and Plan section is the most important part of the note.
@@ -417,6 +421,7 @@ Additional consult note guidance:
 - Social history defaults such as alcohol/tobacco/drug-use denials should be treated as assumptions unless explicitly stated in the shorthand.
 - If exam details are sparse, use the neutral defaults from the consult note instructions; if CT supports appendicitis or cholecystitis and no abdominal exam is given, assume focal RLQ or RUQ tenderness respectively, tagged as ASSUMPTION.
 - ROS and physical exam content default to ASSUMPTION unless explicitly provided or explicitly stated as normal/negative.
+- ROS and physical exam must still be phrased as direct clinician documentation, even when assumed.
 - Assessment should be a short attending-style paragraph synthesizing diagnosis, supporting facts, and operative vs nonoperative reasoning.
 - Plan should follow after one blank line as 3-6 hyphen bullets with one actionable item each.
 - The plan bullets are the highest-priority part of the consult note and must come only from specific stated plans, actions, or recommendations in the shorthand.
